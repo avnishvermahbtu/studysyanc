@@ -883,9 +883,13 @@ class _RoutineScreenState extends State<RoutineScreen> {
           list = snapshot.data!.docs
               .map((doc) => Routine.fromMap(doc.data() as Map<String, dynamic>, doc.id))
               .toList();
-          
-          // Sort items by start time
-          list.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+          // Sort items chronologically by parsed time
+          list.sort((a, b) {
+            final t1 = _controller.parseTimeString(a.startTime, a.date) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final t2 = _controller.parseTimeString(b.startTime, b.date) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return t1.compareTo(t2);
+          });
         }
 
         // Render Dynamic spark and active countdown trackers
@@ -1021,9 +1025,9 @@ class _RoutineScreenState extends State<RoutineScreen> {
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: r.isCheckedIn ? Colors.emerald.withOpacity(0.15) : accent.withOpacity(0.1),
+                                          color: r.isCheckedIn ? Colors.green.withOpacity(0.15) : accent.withOpacity(0.1),
                                           border: Border.all(
-                                            color: r.isCheckedIn ? Colors.emerald : accent,
+                                            color: r.isCheckedIn ? Colors.green : accent,
                                             width: 1,
                                           ),
                                           borderRadius: BorderRadius.circular(20),
@@ -1033,13 +1037,13 @@ class _RoutineScreenState extends State<RoutineScreen> {
                                             Icon(
                                               r.isCheckedIn ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
                                               size: 11,
-                                              color: r.isCheckedIn ? Colors.emerald : accent,
+                                              color: r.isCheckedIn ? Colors.green : accent,
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
                                               r.isCheckedIn ? "ATTENDED (+35 XP)" : "CHECK IN (+35 XP)",
                                               style: TextStyle(
-                                                color: r.isCheckedIn ? Colors.emerald : accent,
+                                                color: r.isCheckedIn ? Colors.green : accent,
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.bold,
                                               ),
