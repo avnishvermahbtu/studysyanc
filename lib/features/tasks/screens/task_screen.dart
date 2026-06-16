@@ -6,6 +6,7 @@ import 'dart:ui';
 import '../models/task_model.dart';
 import 'ai_service.dart';
 import 'task_detail_page.dart';
+import '../../focus/controller/focus_controller.dart';
 
 class TaskScreen extends StatefulWidget {
   const TaskScreen({super.key});
@@ -20,11 +21,59 @@ class _TaskScreenState extends State<TaskScreen> {
   DateTime? dueDateTime;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   String selectedFilter = 'All';
+  Set<String> expandedTaskIds = {};
+  late FocusController _focusController;
 
   // Premium Theme Colors
   final Color primaryColor = const Color(0xff6366f1);
   final Color bgColor = const Color(0xff020617);
   final Color accentColor = const Color(0xff1e293b);
+
+  @override
+  void initState() {
+    super.initState();
+    _focusController = FocusController();
+    _focusController.addListener(_onFocusUpdate);
+  }
+
+  @override
+  void dispose() {
+    _focusController.removeListener(_onFocusUpdate);
+    titleController.dispose();
+    descController.dispose();
+    super.dispose();
+  }
+
+  void _onFocusUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _rewardXp(int amount, String taskTitle) {
+    _focusController.addXp(amount);
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.stars_rounded, color: Colors.amberAccent, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "Completed: $taskTitle\n+$amount XP awarded!",
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: primaryColor,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    );
+  }
 
   Color getPriorityColor(String priority) {
     switch (priority) {
@@ -79,12 +128,10 @@ class _TaskScreenState extends State<TaskScreen> {
     });
   }
 
-  Future<void> addTask() async {
-    if (titleController.text
-        .trim()
-        .isEmpty || descController.text
-        .trim()
-        .isEmpty || dueDateTime == null) {
+  Future<void> addTask({required bool aiDecompose}) async {
+    if (titleController.text.trim().isEmpty ||
+        descController.text.trim().isEmpty ||
+        dueDateTime == null) {
       AwesomeDialog(
         context: context,
         dialogType: DialogType.warning,
@@ -94,23 +141,86 @@ class _TaskScreenState extends State<TaskScreen> {
       ).show();
       return;
     }
-    final aiService = AIService();
 
-    String priority =
-    await aiService.getPriority(
-      titleController.text,
-      descController.text,
-    );
+    // Close bottom sheet
+    Navigator.pop(context);
+
+    // Show AI loading overlay if decomposing
+    if (aiDecompose) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => PopScope(
+          canPop: false,
+          child: Center(
+            child: glassContainer(
+              blur: 20,
+              opacity: 0.15,
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      "AI Strategy Decomposer",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Breaking down task with Gemini...",
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.6), fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final aiService = AIService();
+    List<SubTask> subtasks = [];
+
+    if (aiDecompose) {
+      try {
+        final steps = await aiService.generateSubtasks(
+          titleController.text.trim(),
+          descController.text.trim(),
+        );
+        subtasks = steps.map((s) => SubTask(title: s, isDone: false)).toList();
+      } catch (e) {
+        subtasks = [
+          SubTask(title: "Review core concepts for ${titleController.text.trim()}"),
+          SubTask(title: "Solve practice problems"),
+          SubTask(title: "Complete self-assessment review"),
+        ];
+      }
+    }
+
     Task task = Task(
-      title: titleController.text,
-      description: descController.text,
+      title: titleController.text.trim(),
+      description: descController.text.trim(),
       priority: selectedPriority,
       dueDateTime: dueDateTime!,
       isDone: false,
+      subtasks: subtasks,
     );
 
     await firestore.collection("tasks").add(task.toMap());
-    Navigator.pop(context);
+
+    // Dismiss loading overlay
+    if (aiDecompose && mounted) {
+      Navigator.pop(context);
+    }
   }
 
   void showAddTaskSheet() {
@@ -118,83 +228,111 @@ class _TaskScreenState extends State<TaskScreen> {
     descController.clear();
     dueDateTime = null;
     selectedPriority = "Medium";
+    bool aiDecompose = true; // Enabled by default to encourage students!
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) =>
-          StatefulBuilder(
-            builder: (context, setSheetState) =>
-                Padding(
-                  padding: EdgeInsets.only(bottom: MediaQuery
-                      .of(context)
-                      .viewInsets
-                      .bottom),
-                  child: glassContainer(
-                    blur: 25,
-                    opacity: 0.1,
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: glassContainer(
+            blur: 25,
+            opacity: 0.1,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Create New Task",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                      titleController, "Task Title", Icons.title),
+                  const SizedBox(height: 15),
+                  _buildTextField(
+                      descController, "Description", Icons.description,
+                      maxLines: 3),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: ["Low", "Medium", "High"]
+                        .map((p) => ChoiceChip(
+                              label: Text(p),
+                              selected: selectedPriority == p,
+                              onSelected: (val) =>
+                                  setSheetState(() => selectedPriority = p),
+                              selectedColor: primaryColor,
+                              labelStyle: TextStyle(
+                                  color: selectedPriority == p
+                                      ? Colors.white
+                                      : Colors.white54),
+                              backgroundColor: accentColor,
+                            ))
+                        .toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
                         children: [
-                          const Text("Create New Task", style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 20),
-                          _buildTextField(
-                              titleController, "Task Title", Icons.title),
-                          const SizedBox(height: 15),
-                          _buildTextField(
-                              descController, "Description", Icons.description,
-                              maxLines: 3),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: ["Low", "Medium", "High"].map((p) =>
-                                ChoiceChip(
-                                  label: Text(p),
-                                  selected: selectedPriority == p,
-                                  onSelected: (val) =>
-                                      setSheetState(() => selectedPriority = p),
-                                  selectedColor: primaryColor,
-                                  labelStyle: TextStyle(
-                                      color: selectedPriority == p ? Colors
-                                          .white : Colors.white54),
-                                  backgroundColor: accentColor,
-                                )).toList(),
+                          const Icon(Icons.auto_awesome, color: Color(0xff6366f1), size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            "AI Subtask Strategy",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 20),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              await pickDateTime();
-                              setSheetState(() {});
-                            },
-                            icon: const Icon(Icons.calendar_month),
-                            label: Text(dueDateTime == null
-                                ? "Select Deadline"
-                                : DateFormat('jm').format(dueDateTime!)),
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryColor,
-                                  padding: const EdgeInsets.all(16)),
-                              onPressed: addTask,
-                              child: const Text("Save Task", style: TextStyle(
-                                  fontSize: 18, color: Colors.white)),
-                            ),
-                          )
                         ],
                       ),
-                    ),
+                      Switch(
+                        value: aiDecompose,
+                        onChanged: (val) {
+                          setSheetState(() {
+                            aiDecompose = val;
+                          });
+                        },
+                        activeColor: primaryColor,
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      await pickDateTime();
+                      setSheetState(() {});
+                    },
+                    icon: const Icon(Icons.calendar_month),
+                    label: Text(dueDateTime == null
+                        ? "Select Deadline"
+                        : DateFormat('MMM d, yyyy • hh:mm a').format(dueDateTime!)),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.all(16)),
+                      onPressed: () => addTask(aiDecompose: aiDecompose),
+                      child: const Text("Save Task",
+                          style: TextStyle(fontSize: 18, color: Colors.white)),
+                    ),
+                  )
+                ],
+              ),
+            ),
           ),
+        ),
+      ),
     );
   }
 
@@ -210,7 +348,8 @@ class _TaskScreenState extends State<TaskScreen> {
         labelStyle: const TextStyle(color: Colors.white54),
         filled: true,
         fillColor: Colors.white.withOpacity(0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
             borderSide: BorderSide.none),
       ),
     );
@@ -223,19 +362,24 @@ class _TaskScreenState extends State<TaskScreen> {
       body: Stack(
         children: [
           // Futuristic background glows
-          Positioned(top: -100,
+          Positioned(
+              top: -100,
               right: -50,
               child: CircleAvatar(
-                  radius: 150, backgroundColor: primaryColor.withOpacity(0.1))),
-          Positioned(bottom: -50,
+                  radius: 150,
+                  backgroundColor: primaryColor.withOpacity(0.1))),
+          Positioned(
+              bottom: -50,
               left: -50,
               child: CircleAvatar(
-                  radius: 150, backgroundColor: Colors.blue.withOpacity(0.05))),
+                  radius: 150,
+                  backgroundColor: Colors.blue.withOpacity(0.05))),
 
           SafeArea(
             child: Column(
               children: [
                 _buildHeader(),
+                _buildXpHeader(),
                 _buildFilterBar(),
                 _buildTaskList(),
               ],
@@ -254,23 +398,141 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 10.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text("Welcome Back,",
                   style: TextStyle(color: Colors.white54, fontSize: 16)),
-              Text("My Tasks", style: TextStyle(color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold)),
+              Text("My Questboard",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
-
         ],
+      ),
+    );
+  }
+
+  Widget _buildXpHeader() {
+    final xp = _focusController.xp;
+    final lvl = _focusController.level;
+    final needed = _focusController.xpNeededForNextLevel();
+    final pct = (xp / needed).clamp(0.0, 1.0);
+    final rank = _focusController.getRankName();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
+      child: glassContainer(
+        opacity: 0.08,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rank.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.amberAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Level $lvl Practitioner",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: primaryColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.stars, color: Colors.amber, size: 18),
+                        const SizedBox(width: 4),
+                        Text(
+                          "$xp / $needed XP",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // XP Progress Bar
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 500),
+                        height: 8,
+                        width: constraints.maxWidth * pct,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xff6366f1), Colors.pinkAccent],
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.4),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -293,13 +555,15 @@ class _TaskScreenState extends State<TaskScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? primaryColor : Colors.white.withOpacity(
-                    0.05),
+                color: isSelected
+                    ? primaryColor
+                    : Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(filters[index], style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white54,
-                  fontWeight: FontWeight.bold)),
+              child: Text(filters[index],
+                  style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white54,
+                      fontWeight: FontWeight.bold)),
             ),
           );
         },
@@ -312,30 +576,33 @@ class _TaskScreenState extends State<TaskScreen> {
       child: StreamBuilder<QuerySnapshot>(
         stream: firestore.collection("tasks").snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
 
-          var tasks = snapshot.data!
-              .docs
+          var tasks = snapshot.data!.docs
               .map((doc) =>
-              Task.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+                  Task.fromMap(doc.data() as Map<String, dynamic>, doc.id))
               .toList();
 
           // Filtering logic
           if (selectedFilter == "Today") {
             tasks = tasks
                 .where((t) =>
-            !t.isDone && DateUtils.isSameDay(t.dueDateTime, DateTime.now()))
+                    !t.isDone &&
+                    DateUtils.isSameDay(t.dueDateTime, DateTime.now()))
                 .toList();
           } else if (selectedFilter == "Upcoming") {
-            tasks = tasks.where((t) =>
-            !t.isDone && t.dueDateTime!.isAfter(DateTime.now()) &&
-                !DateUtils.isSameDay(t.dueDateTime, DateTime.now())).toList();
+            tasks = tasks
+                .where((t) =>
+                    !t.isDone &&
+                    t.dueDateTime!.isAfter(DateTime.now()) &&
+                    !DateUtils.isSameDay(t.dueDateTime, DateTime.now()))
+                .toList();
           } else if (selectedFilter == "Completed") {
             tasks = tasks.where((t) => t.isDone).toList();
           }
 
-          // Agar list khali hai to ye "Better Way" wala empty state dikhao
           if (tasks.isEmpty) {
             return _buildEmptyState();
           }
@@ -354,7 +621,14 @@ class _TaskScreenState extends State<TaskScreen> {
   }
 
   Widget _buildTaskCard(Task task) {
-    bool isOverdue = !task.isDone && task.dueDateTime!.isBefore(DateTime.now());
+    bool isOverdue =
+        !task.isDone && task.dueDateTime != null && task.dueDateTime!.isBefore(DateTime.now());
+    bool isExpanded = expandedTaskIds.contains(task.id);
+
+    int totalSubtasks = task.subtasks.length;
+    int completedSubtasks = task.subtasks.where((s) => s.isDone).length;
+    double progress =
+        totalSubtasks > 0 ? completedSubtasks / totalSubtasks : 0.0;
 
     return Dismissible(
       key: Key(task.id!),
@@ -372,58 +646,431 @@ class _TaskScreenState extends State<TaskScreen> {
         margin: const EdgeInsets.only(bottom: 16),
         child: glassContainer(
           opacity: 0.08,
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 10),
-            onTap: () =>
-                Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => TaskDetailPage(task: task))),
-            leading: GestureDetector(
-              onTap: () =>
-                  firestore.collection("tasks").doc(task.id).update(
-                      {'isDone': !task.isDone}),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: task.isDone ? Colors.greenAccent : Colors.transparent,
-                  border: Border.all(
-                      color: task.isDone ? Colors.greenAccent : Colors.white24,
-                      width: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    if (isExpanded) {
+                      expandedTaskIds.remove(task.id);
+                    } else {
+                      expandedTaskIds.add(task.id!);
+                    }
+                  });
+                },
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () async {
+                          bool newDone = !task.isDone;
+                          int xpAward = 0;
+                          if (newDone) {
+                            if (task.priority == "High") {
+                              xpAward = 50;
+                            } else if (task.priority == "Medium") {
+                              xpAward = 30;
+                            } else {
+                              xpAward = 15;
+                            }
+                            _rewardXp(xpAward, task.title);
+                          }
+
+                          List<SubTask> updatedSubtasks = List.from(task.subtasks);
+                          for (var sub in updatedSubtasks) {
+                            sub.isDone = newDone;
+                          }
+
+                          await firestore.collection("tasks").doc(task.id).update({
+                            'isDone': newDone,
+                            'subtasks':
+                                updatedSubtasks.map((s) => s.toMap()).toList(),
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                task.isDone ? Colors.greenAccent : Colors.transparent,
+                            border: Border.all(
+                                color: task.isDone
+                                    ? Colors.greenAccent
+                                    : Colors.white24,
+                                width: 2),
+                          ),
+                          child: task.isDone
+                              ? const Icon(Icons.check, size: 14, color: Colors.black)
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              task.title,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                decoration: task.isDone ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_month,
+                                  size: 12,
+                                  color: isOverdue ? Colors.redAccent : Colors.white38,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  task.dueDateTime != null
+                                      ? DateFormat('MMM d • hh:mm a').format(task.dueDateTime!)
+                                      : "No Deadline",
+                                  style: TextStyle(
+                                      color:
+                                          isOverdue ? Colors.redAccent : Colors.white38,
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: getPriorityColor(task.priority).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: getPriorityColor(task.priority)
+                                  .withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          task.priority,
+                          style: TextStyle(
+                              color: getPriorityColor(task.priority),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: Colors.white54,
+                        size: 20,
+                      ),
+                    ],
+                  ),
                 ),
-                child: task.isDone ? const Icon(
-                    Icons.check, size: 16, color: Colors.black) : null,
               ),
-            ),
-            title: Text(
-              task.title,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                decoration: task.isDone ? TextDecoration.lineThrough : null,
-              ),
-            ),
-            subtitle: Text(
-              DateFormat('MMM d • hh:mm a').format(task.dueDateTime!),
-              style: TextStyle(
-                  color: isOverdue ? Colors.redAccent : Colors.white38,
-                  fontSize: 12),
-            ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: getPriorityColor(task.priority).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: getPriorityColor(task.priority).withOpacity(0.3)),
-              ),
-              child: Text(task.priority, style: TextStyle(
-                  color: getPriorityColor(task.priority),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold)),
-            ),
+              if (!isExpanded && totalSubtasks > 0)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Colors.white10,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              progress == 1.0 ? Colors.greenAccent : primaryColor,
+                            ),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        "$completedSubtasks/$totalSubtasks Steps",
+                        style: TextStyle(
+                          color: progress == 1.0 ? Colors.greenAccent : Colors.white38,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (isExpanded) ...[
+                const Divider(color: Colors.white12, height: 1),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (task.description.isNotEmpty) ...[
+                        Text(
+                          task.description,
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 13,
+                              height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      if (totalSubtasks > 0) ...[
+                        Row(
+                          children: [
+                            const Icon(Icons.auto_awesome,
+                                color: Color(0xff6366f1), size: 14),
+                            const SizedBox(width: 6),
+                            const Text(
+                              "AI STUDY STRATEGY",
+                              style: TextStyle(
+                                color: Color(0xff6366f1),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(2),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white10,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      progress == 1.0 ? Colors.greenAccent : primaryColor,
+                                    ),
+                                    minHeight: 4,
+                                  )),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              "${(progress * 100).toInt()}% Done",
+                              style: TextStyle(
+                                color: progress == 1.0 ? Colors.greenAccent : Colors.white54,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ...List.generate(totalSubtasks, (subIndex) {
+                          final sub = task.subtasks[subIndex];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4.0),
+                            child: InkWell(
+                              onTap: () async {
+                                bool newSubDone = !sub.isDone;
+                                if (newSubDone) {
+                                  _rewardXp(5, sub.title);
+                                }
+                                List<SubTask> updatedSubtasks =
+                                    List.from(task.subtasks);
+                                updatedSubtasks[subIndex] = SubTask(
+                                  title: sub.title,
+                                  isDone: newSubDone,
+                                );
+
+                                bool allDone = updatedSubtasks.isNotEmpty &&
+                                    updatedSubtasks.every((s) => s.isDone);
+                                bool mainDone = task.isDone;
+
+                                if (allDone && !task.isDone) {
+                                  mainDone = true;
+                                  int xpAward = 0;
+                                  if (task.priority == "High") {
+                                    xpAward = 50;
+                                  } else if (task.priority == "Medium") {
+                                    xpAward = 30;
+                                  } else {
+                                    xpAward = 15;
+                                  }
+                                  _rewardXp(xpAward,
+                                      "${task.title} (All checkpoints cleared!)");
+                                } else if (!allDone && task.isDone) {
+                                  mainDone = false;
+                                }
+
+                                await firestore
+                                    .collection("tasks")
+                                    .doc(task.id)
+                                    .update({
+                                  'isDone': mainDone,
+                                  'subtasks': updatedSubtasks
+                                      .map((s) => s.toMap())
+                                      .toList(),
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8.0, vertical: 4.0),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      sub.isDone
+                                          ? Icons.check_box_rounded
+                                          : Icons.check_box_outline_blank_rounded,
+                                      color: sub.isDone
+                                          ? Colors.greenAccent
+                                          : Colors.white38,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        sub.title,
+                                        style: TextStyle(
+                                          color: sub.isDone
+                                              ? Colors.white38
+                                              : Colors.white70,
+                                          fontSize: 13,
+                                          decoration: sub.isDone
+                                              ? TextDecoration.lineThrough
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              "No subtask strategy generated.",
+                              style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic),
+                            ),
+                            TextButton.icon(
+                              onPressed: () async {
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) => PopScope(
+                                    canPop: false,
+                                    child: Center(
+                                      child: glassContainer(
+                                        blur: 20,
+                                        opacity: 0.15,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(32),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const CircularProgressIndicator(
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                        Color>(
+                                                        Color(0xff6366f1)),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              const Text(
+                                                "AI Strategy Decomposer",
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 18,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                "Generating checklist...",
+                                                style: TextStyle(
+                                                    color: Colors.white
+                                                        .withOpacity(0.6),
+                                                    fontSize: 14),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+
+                                final aiService = AIService();
+                                try {
+                                  final steps = await aiService.generateSubtasks(
+                                      task.title, task.description);
+                                  final newSubtasks = steps
+                                      .map((s) => SubTask(title: s, isDone: false))
+                                      .toList();
+                                  await firestore
+                                      .collection("tasks")
+                                      .doc(task.id)
+                                      .update({
+                                    'subtasks': newSubtasks
+                                        .map((s) => s.toMap())
+                                        .toList(),
+                                  });
+                                } catch (e) {
+                                  //
+                                }
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                }
+                              },
+                              icon: const Icon(Icons.auto_awesome,
+                                  size: 14, color: Color(0xff6366f1)),
+                              label: const Text(
+                                "Decompose with AI",
+                                style: TextStyle(
+                                    color: Color(0xff6366f1),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => TaskDetailPage(task: task),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit_note,
+                              size: 18, color: Colors.white70),
+                          label: const Text(
+                            "Edit Details",
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),
@@ -435,7 +1082,6 @@ class _TaskScreenState extends State<TaskScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Ek chamakta hua icon
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -443,17 +1089,18 @@ class _TaskScreenState extends State<TaskScreen> {
               color: primaryColor.withOpacity(0.05),
             ),
             child: Icon(
-              selectedFilter == "Completed" ? Icons.check_circle_outline_rounded : Icons.assignment_late_outlined,
+              selectedFilter == "Completed"
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.assignment_late_outlined,
               size: 80,
               color: primaryColor.withOpacity(0.4),
             ),
           ),
           const SizedBox(height: 24),
-          // Stylish Text
           Text(
             selectedFilter == "All"
-                ? "No tasks added yet"
-                : "No $selectedFilter tasks found",
+                ? "Your Questboard is empty"
+                : "No $selectedFilter quests found",
             style: const TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -463,7 +1110,7 @@ class _TaskScreenState extends State<TaskScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Your schedule is clear. Enjoy your day! ✨",
+            "Add study targets and let Gemini build your strategy! ✨",
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withOpacity(0.4),

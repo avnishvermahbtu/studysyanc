@@ -14,14 +14,25 @@ class MainNavigationScreen extends StatefulWidget {
 }
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int currentIndex = 0;
-  final screens = [
-    DashboardScreen(),
-    TaskScreen(),
-    RoutineScreen(),
-   FocusScreen(),
-    AICoachScreen()
+  late final List<Widget> screens;
 
-  ];
+  void navigateToTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    screens = [
+      DashboardScreen(onNavigate: navigateToTab),
+      const TaskScreen(),
+      const RoutineScreen(),
+      const FocusScreen(),
+      const AICoachScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
