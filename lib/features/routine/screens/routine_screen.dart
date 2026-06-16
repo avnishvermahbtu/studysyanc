@@ -1,319 +1,404 @@
+import 'dart:ui';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
-
+import '../controller/routine_controller.dart';
+import 'routine_model.dart';
 
 class RoutineScreen extends StatefulWidget {
+  const RoutineScreen({super.key});
 
   @override
   State<RoutineScreen> createState() => _RoutineScreenState();
 }
-class _RoutineScreenState extends State<RoutineScreen> {
-  final firestore=FirebaseFirestore.instance;
-  final titleController=TextEditingController();
-  final locationController=TextEditingController();
 
+class _RoutineScreenState extends State<RoutineScreen> {
+  final firestore = FirebaseFirestore.instance;
+  
+  // Form controllers
+  final titleController = TextEditingController();
+  final locationController = TextEditingController();
   String selectedType = "Lecture";
-  final List<String> routineTypes = ["Lecture", "Lab", "Seminar", "Study"];
-  DateTime currentWeek = DateTime.now();
+  final List<String> routineTypes = ["Lecture", "Lab", "Exam", "Study", "Personal"];
+  
   TimeOfDay? startTime;
   TimeOfDay? endTime;
-  DateTime selectedDate=DateTime.now();
+
+  late RoutineController _controller;
+
   final Map<String, Color> typeColors = {
-    "Lecture": Colors.blue,
-    "Lab": Colors.purple,
-    "Seminar": Colors.orange,
-    "Study": Colors.green,
+    "Lecture": Colors.blueAccent,
+    "Lab": Colors.purpleAccent,
+    "Exam": Colors.redAccent,
+    "Study": Colors.greenAccent,
+    "Personal": Colors.orangeAccent,
+  };
+
+  final Map<String, IconData> typeIcons = {
+    "Lecture": Icons.menu_book_rounded,
+    "Lab": Icons.biotech_rounded,
+    "Exam": Icons.assignment_late_rounded,
+    "Study": Icons.school_rounded,
+    "Personal": Icons.self_improvement_rounded,
   };
 
   @override
-  Widget build(BuildContext context) {
-   return Scaffold(
-    backgroundColor: Color(0xff0f172a),
-     /// Floating Action Button
-       floatingActionButton: FloatingActionButton(
-         onPressed: showAddRoutineDialog,
-         backgroundColor: Colors.transparent,
-         elevation: 0,
-         child: Container(
-           width: 60,
-           height: 60,
-           decoration: BoxDecoration(
-             gradient: const LinearGradient(
-               colors: [Color(0xff3b82f6), Color(0xff1e40af)],
-             ),
-             shape: BoxShape.circle,
-             boxShadow: [
-               BoxShadow(color: Colors.blue.withOpacity(0.5), blurRadius: 15, spreadRadius: 2),
-             ],
-           ),
-           child: const Icon(Icons.add_rounded, size: 32, color: Colors.white),
-         ),
-       ),
-     /// AppBar
-     appBar: AppBar(
-       centerTitle: true,
-       title: Text("Routine",style: TextStyle(
-         color: Colors.white,
-         fontWeight: FontWeight.bold
-       ),),
-       backgroundColor: Colors.transparent,
-         elevation: 0,
-     ),
-     body:SafeArea(child: Column(
-       children: [
-         header(),
-         weekDatePicker(),
-         SizedBox(height: 10,),
-         Expanded(
-             child: routineList())
-       ],
-     ))
-   );
+  void initState() {
+    super.initState();
+    _controller = RoutineController();
+    _controller.addListener(_onControllerUpdate);
   }
 
-  Widget header() {
-    String greeting = "";
-    int hour = DateTime.now().hour;
-    if (hour < 12) {
-      greeting = "Good Morning";
-    } else if (hour < 17) {
-      greeting = "Good Afternoon";
-    } else {
-      greeting = "Good Evening";
+  void _onControllerUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onControllerUpdate);
+    titleController.dispose();
+    locationController.dispose();
+    super.dispose();
+  }
+
+  // Refined Glassmorphism card
+  Widget _buildGlassCard({required Widget child, double blur = 15, double opacity = 0.05, Color borderColor = Colors.white10}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(opacity),
+            border: Border.all(color: borderColor, width: 1.2),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  // AI Briefing Dynamic Spark Card
+  Widget _buildDailySparkCard(List<Routine> routines) {
+    String message = _controller.compileDailyBrief(routines);
+    Color themeColor = routines.isNotEmpty ? Colors.blueAccent : Colors.amberAccent;
+
+    return _buildGlassCard(
+      opacity: 0.06,
+      borderColor: themeColor.withOpacity(0.15),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: themeColor.withOpacity(0.12),
+              ),
+              child: Icon(Icons.bolt_rounded, color: themeColor, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "DAILY BRIEFING",
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: themeColor,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Active / Up Next Live Status Panel
+  Widget _buildLiveCountdownPanel(List<Routine> routines) {
+    final scheduleStates = _controller.getLiveScheduleStates(routines);
+    final Routine? active = scheduleStates["active"];
+    final Routine? next = scheduleStates["next"];
+    final int countdown = scheduleStates["countdown"];
+
+    if (active != null) {
+      final Color accent = typeColors[active.type] ?? Colors.blueAccent;
+      return _buildGlassCard(
+        opacity: 0.08,
+        borderColor: accent.withOpacity(0.3),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "CURRENT CLASS",
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: accent, letterSpacing: 1),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    "${active.startTime} - ${active.endTime}",
+                    style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                active.title,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              // Simulated attendance progress bar
+              Stack(
+                children: [
+                  Container(
+                    height: 5,
+                    decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(5)),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(seconds: 1),
+                    height: 5,
+                    width: 100, // Fixed decoration bar
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(5),
+                      boxShadow: [BoxShadow(color: accent.withOpacity(0.5), blurRadius: 4)],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xff1e3a8a),     // Deep blue
-            Color(0xff312e81),     // Indigo
-            Color(0xff1e2937),     // Slate dark
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// Top Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    if (next != null && countdown <= 60) {
+      final Color accent = typeColors[next.type] ?? Colors.blueAccent;
+      return _buildGlassCard(
+        opacity: 0.08,
+        borderColor: accent.withOpacity(0.2),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             children: [
-              /// Greeting Section
+              Icon(Icons.alarm_on_rounded, color: accent, size: 28),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "$greeting, Avnesh 👋",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                        shadows: [
-                          Shadow(
-                            color: Colors.white24,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
+                      "UP NEXT IN $countdown MINS",
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: accent, letterSpacing: 1),
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      "Stay focused and keep crushing your goals!",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                        height: 1.3,
-                      ),
+                    const SizedBox(height: 2),
+                    Text(
+                      next.title,
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
-
-              /// Icons Row (Glassmorphism style)
-              Row(
-                children: [
-                  // Notification
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.15),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.notifications_outlined,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Avatar with subtle border
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: const CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.white,
-                      child: Icon(
-                        Icons.person,
-                        color: Color(0xff1e3a8a),
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
+        ),
+      );
+    }
 
-          const SizedBox(height: 28),
+    return const SizedBox.shrink();
+  }
 
-          /// Date Section with icon
-          Row(
+  // Calendar Header and Title
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 15, 20, 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.calendar_today_rounded,
-                color: Colors.white70,
-                size: 18,
-              ),
-              const SizedBox(width: 10),
               Text(
-                DateFormat("EEEE, d MMMM").format(DateTime.now()),
+                "${_controller.getGreeting()}, Avnesh 👋",
                 style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 3),
+              const Text(
+                "My Schedule",
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
+          ),
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _controller.selectDate(DateTime.now());
+              _controller.setWeek(DateTime.now());
+            },
+            child: _buildGlassCard(
+              opacity: 0.08,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Icon(Icons.today_rounded, color: Colors.white70, size: 22),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-  Widget weekDatePicker() {
-    DateTime startOfWeek =
-    currentWeek.subtract(Duration(days: currentWeek.weekday - 1));
+
+  // Week Strip Selector
+  Widget _buildWeekStrip() {
+    DateTime startOfWeek = _controller.currentWeek.subtract(
+      Duration(days: _controller.currentWeek.weekday - 1),
+    );
+
     return Column(
       children: [
-        /// Month + arrows
+        // Navigation Month row
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                DateFormat('MMMM yyyy').format(currentWeek),
+                DateFormat('MMMM yyyy').format(_controller.currentWeek),
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
+                  color: Colors.white70,
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
-
               Row(
                 children: [
-                  /// Previous week
                   IconButton(
-                    icon: const Icon(Icons.chevron_left,color: Colors.white),
-                    onPressed: (){
-                      setState(() {
-                        currentWeek =
-                            currentWeek.subtract(const Duration(days:7));
-                      });
+                    icon: const Icon(Icons.chevron_left_rounded, color: Colors.white60, size: 26),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _controller.previousWeek();
                     },
                   ),
-                  /// Next week
                   IconButton(
-                    icon: const Icon(Icons.chevron_right,color: Colors.white),
-                    onPressed: (){
-                      setState(() {
-                        currentWeek =
-                            currentWeek.add(const Duration(days:7));
-                      });
+                    icon: const Icon(Icons.chevron_right_rounded, color: Colors.white60, size: 26),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      _controller.nextWeek();
                     },
                   ),
-
                 ],
-              )
+              ),
             ],
           ),
         ),
-        const SizedBox(height:10),
-        /// Days row
+        const SizedBox(height: 5),
+
+        // Date selection cards
         SizedBox(
-          height:80,
+          height: 80,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             itemCount: 7,
-            itemBuilder: (context,index){
-              DateTime date = startOfWeek.add(Duration(days:index));
-              bool isSelected =
-                  DateFormat('yyyyMMdd').format(date) ==
-                      DateFormat('yyyyMMdd').format(selectedDate);
+            itemBuilder: (context, index) {
+              DateTime date = startOfWeek.add(Duration(days: index));
+              bool isSelected = DateUtils.isSameDay(date, _controller.selectedDate);
+              bool isToday = DateUtils.isSameDay(date, DateTime.now());
+
               return GestureDetector(
-                onTap: (){
-                  setState(() {
-                    selectedDate = date;
-                  });
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _controller.selectDate(date);
                 },
-                child: Container(
-                  width:70,
-                  margin: const EdgeInsets.symmetric(horizontal:8),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 58,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
-                    // Container ke andar decoration mein add kar
-                      boxShadow: isSelected ? [
-                        BoxShadow(color: Colors.blue.withOpacity(0.7), blurRadius: 25, spreadRadius: 3)
-                      ] : null,
                     color: isSelected
-                        ? const Color(0xff2563eb)
-                        : const Color(0xff1e293b),
-                    borderRadius: BorderRadius.circular(14),
+                        ? Colors.blueAccent
+                        : Colors.white.withOpacity(0.03),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.blueAccent
+                          : isToday
+                              ? Colors.white24
+                              : Colors.transparent,
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: Colors.blueAccent.withOpacity(0.35),
+                              blurRadius: 12,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         DateFormat('EEE').format(date).toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize:12,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white38,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height:6),
+                      const SizedBox(height: 6),
                       Text(
                         DateFormat('d').format(date),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize:20,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -327,8 +412,459 @@ class _RoutineScreenState extends State<RoutineScreen> {
       ],
     );
   }
-  Widget routineList() {
-    DateTime startOfDay = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+  // Attendance Check-In celebration overlay
+  void _playCelebration() {
+    HapticFeedback.heavyImpact();
+    // Confetti or visual celebration (can hook into a snackbar)
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Text("🎓 ", style: TextStyle(fontSize: 22)),
+            Expanded(
+              child: Text(
+                "Check-In Complete! Attended class & earned +35 Focus XP!",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blue.shade800,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(20),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Slide drawer to display detailed Notes & Homework notepad
+  void _showClassDetailsDrawer(Routine routine) {
+    final TextEditingController notesFieldController = TextEditingController(text: routine.notes);
+    final Color accent = typeColors[routine.type] ?? Colors.blueAccent;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: _buildGlassCard(
+            blur: 25,
+            opacity: 0.14,
+            borderColor: accent.withOpacity(0.2),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Pull notch
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Class Name and Type
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          routine.title,
+                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: accent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: accent.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          routine.type.toUpperCase(),
+                          style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Location & Time metadata
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, color: accent, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "${routine.startTime} — ${routine.endTime}",
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
+                      const SizedBox(width: 20),
+                      Icon(Icons.location_on_rounded, color: accent, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          routine.location.isNotEmpty ? routine.location : "No Location",
+                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 25),
+
+                  // Lecture Notes Area
+                  const Text(
+                    "Lecture Notes & Tasks",
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: notesFieldController,
+                    maxLines: 4,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: "Add homework details, links, or notes from this class...",
+                      hintStyle: const TextStyle(color: Colors.white24),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.04),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+
+                  // Action row
+                  Row(
+                    children: [
+                      // Delete Class
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          AwesomeDialog(
+                            context: context,
+                            dialogType: DialogType.warning,
+                            title: "Delete Class?",
+                            desc: "Are you sure you want to delete ${routine.title}?",
+                            btnCancelOnPress: () {},
+                            btnOkOnPress: () {
+                              if (routine.id != null) {
+                                firestore.collection("routine").doc(routine.id).delete();
+                              }
+                            },
+                          ).show();
+                        },
+                        child: CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Colors.red.withOpacity(0.12),
+                          child: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+
+                      // Save changes
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accent,
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                            onPressed: () async {
+                              final text = notesFieldController.text.trim();
+                              if (routine.id != null) {
+                                await firestore.collection("routine").doc(routine.id).update({
+                                  "notes": text,
+                                });
+                              }
+                              Navigator.pop(context);
+                            },
+                            child: const Text(
+                              "SAVE NOTES",
+                              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Redesigned Add Routine bottom sheet
+  void _showAddRoutineSheet() {
+    titleController.clear();
+    locationController.clear();
+    selectedType = "Lecture";
+    startTime = null;
+    endTime = null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final Color accent = typeColors[selectedType] ?? Colors.blueAccent;
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: _buildGlassCard(
+                blur: 25,
+                opacity: 0.15,
+                borderColor: accent.withOpacity(0.2),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        "Add Class Block",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          shadows: [Shadow(color: accent.withOpacity(0.3), blurRadius: 8)],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Title
+                      TextField(
+                        controller: titleController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: "Subject Name",
+                          labelStyle: const TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.04),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          prefixIcon: Icon(Icons.book_rounded, color: accent),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+
+                      // Location
+                      TextField(
+                        controller: locationController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: "Room / Location",
+                          labelStyle: const TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.04),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          prefixIcon: Icon(Icons.location_on_rounded, color: accent),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Type selector Wrap
+                      const Text("Type", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: routineTypes.map((type) {
+                          bool isSel = selectedType == type;
+                          Color color = typeColors[type] ?? Colors.blueAccent;
+                          return GestureDetector(
+                            onTap: () => setSheetState(() => selectedType = type),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSel ? color.withOpacity(0.18) : Colors.white.withOpacity(0.03),
+                                border: Border.all(color: isSel ? color : Colors.white12, width: 1.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                type,
+                                style: TextStyle(
+                                  color: isSel ? Colors.white : Colors.white38,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Times
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTimePickerBox(
+                              "Start Time",
+                              startTime,
+                              () async {
+                                TimeOfDay? picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: startTime ?? TimeOfDay.now(),
+                                );
+                                if (picked != null) {
+                                  setSheetState(() => startTime = picked);
+                                }
+                              },
+                              accent,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: _buildTimePickerBox(
+                              "End Time",
+                              endTime,
+                              () async {
+                                TimeOfDay? picked = await showTimePicker(
+                                  context: context,
+                                  initialTime: endTime ?? TimeOfDay.now(),
+                                );
+                                if (picked != null) {
+                                  setSheetState(() => endTime = picked);
+                                }
+                              },
+                              accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+
+                      // Save Button
+                      SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 8,
+                            shadowColor: accent.withOpacity(0.4),
+                          ),
+                          onPressed: () {
+                            if (titleController.text.trim().isEmpty || locationController.text.trim().isEmpty) {
+                              AwesomeDialog(
+                                context: context,
+                                dialogType: DialogType.warning,
+                                title: "Missing Info",
+                                desc: "Please fill in Subject and Room details.",
+                                btnOkOnPress: () {},
+                              ).show();
+                              return;
+                            }
+                            if (startTime == null || endTime == null) {
+                              AwesomeDialog(
+                                context: context,
+                                dialogType: DialogType.warning,
+                                title: "Select Time",
+                                desc: "Please choose Start and End time.",
+                                btnOkOnPress: () {},
+                              ).show();
+                              return;
+                            }
+
+                            _saveRoutine();
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            "ADD TO TIMETABLE",
+                            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Helper widget for showing time boxes
+  Widget _buildTimePickerBox(String label, TimeOfDay? time, VoidCallback onTap, Color accent) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Column(
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 5),
+            Text(
+              time == null ? "-- : --" : time.format(context),
+              style: TextStyle(color: time == null ? Colors.white24 : Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Firestore save routine
+  void _saveRoutine() async {
+    DateTime date = DateTime(
+      _controller.selectedDate.year,
+      _controller.selectedDate.month,
+      _controller.selectedDate.day,
+    );
+
+    await firestore.collection("routine").add({
+      "title": titleController.text.trim(),
+      "location": locationController.text.trim(),
+      "type": selectedType,
+      "startTime": startTime?.format(context),
+      "endTime": endTime?.format(context),
+      "date": Timestamp.fromDate(date),
+      "notes": "",
+      "isCheckedIn": false,
+      "createdAt": FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Stream-based schedule layout
+  Widget _buildRoutineList() {
+    DateTime startOfDay = DateTime(
+      _controller.selectedDate.year,
+      _controller.selectedDate.month,
+      _controller.selectedDate.day,
+    );
     DateTime endOfDay = startOfDay.add(const Duration(days: 1));
 
     return StreamBuilder<QuerySnapshot>(
@@ -336,551 +872,281 @@ class _RoutineScreenState extends State<RoutineScreen> {
           .collection("routine")
           .where("date", isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where("date", isLessThan: Timestamp.fromDate(endOfDay))
-          .orderBy("date")
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Colors.blue));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.calendar_today_outlined, size: 90, color: Colors.white24),
-                const SizedBox(height: 20),
-                const Text("No classes today 😴", style: TextStyle(fontSize: 22, color: Colors.white70)),
-                const SizedBox(height: 10),
-                const Text("Tap + to add your routine 🚀", style: TextStyle(fontSize: 16, color: Colors.white38)),
-              ],
-            ),
-          );
+          return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
         }
 
-        var docs = snapshot.data!.docs;
+        var list = <Routine>[];
+        if (snapshot.hasData) {
+          list = snapshot.data!.docs
+              .map((doc) => Routine.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          
+          // Sort items by start time
+          list.sort((a, b) => a.startTime.compareTo(b.startTime));
+        }
 
-        return AnimationLimiter(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              var routine = docs[index];
-
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 500),
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Dismissible(
-                        key: Key(routine.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          child: const Icon(Icons.delete, color: Colors.white, size: 28),
-                        ),
-                        onDismissed: (_) {
-                          firestore.collection("routine").doc(routine.id).delete();
-                        },
-                        child: routineCard(routine),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-  Widget routineCard(DocumentSnapshot routine) {
-    final data = routine.data() as Map<String, dynamic>;
-    final String type = data['type'] ?? 'Lecture';
-    final Color accentColor = typeColors[type] ?? Colors.blue;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Enhanced Timeline
-        Column(
+        // Render Dynamic spark and active countdown trackers
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: accentColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: accentColor.withOpacity(0.6), blurRadius: 12, spreadRadius: 3),
-                ],
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+              child: _buildDailySparkCard(list),
             ),
-            Container(
-              width: 3.5,
-              height: 125,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [accentColor.withOpacity(0.9), accentColor.withOpacity(0.05)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(width: 14),
-
-        // Main Card - More Premium Look
-        Expanded(
-          child: GestureDetector(
-            onLongPress: () {
-              AwesomeDialog(
-                context: context,
-                dialogType: DialogType.warning,
-                title: "Delete Routine?",
-                desc: "Are you sure you want to delete this?",
-                btnCancelOnPress: () {},
-                btnOkOnPress: () => firestore.collection("routine").doc(routine.id).delete(),
-              ).show();
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xff1e293b), Color(0xff0f172a)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: accentColor.withOpacity(0.25), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: accentColor.withOpacity(0.25),
-                    blurRadius: 25,
-                    spreadRadius: 6,
-                    offset: const Offset(0, 10),
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          data['title'] ?? '',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: accentColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: accentColor.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          type.toUpperCase(),
-                          style: TextStyle(
-                            color: accentColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Time Row
-                  Row(
-                    children: [
-                      Icon(Icons.access_time_rounded, size: 20, color: accentColor),
-                      const SizedBox(width: 10),
-                      Text(
-                        "${data['startTime'] ?? ''}  —  ${data['endTime'] ?? ''}",
-                        style: TextStyle(
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Location Row
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_rounded, size: 20, color: accentColor),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          data['location'] ?? 'No location',
-                          style: TextStyle(
-                            fontSize: 15.5,
-                            color: Colors.grey.shade300,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-  void showAddRoutineDialog() {
-    // Reset values
-    titleController.clear();
-    locationController.clear();
-    selectedType = "Lecture";
-    startTime = null;
-    endTime = null;
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "Add Routine",
-      barrierColor: Colors.black.withOpacity(0.7),
-      transitionDuration: const Duration(milliseconds: 350),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return const SizedBox.shrink(); // Not used directly
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 1.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOutCubic;
-
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        var offsetAnimation = animation.drive(tween);
-
-        return SlideTransition(
-          position: offsetAnimation,
-          child: FadeTransition(
-            opacity: animation,
-            child: _buildModernDialog(context),
-          ),
-        );
-      },
-    );
-  }
-  Widget _buildModernDialog(BuildContext context) {
-    return Center(
-      child: Material(
-        color: Colors.transparent,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-          decoration: BoxDecoration(
-            color: const Color(0xff1e293b),
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 30,
-                spreadRadius: 5,
+            if (list.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 5),
+                child: _buildLiveCountdownPanel(list),
               ),
             ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xff2563eb), Color(0xff1e40af)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.calendar_today_rounded, color: Colors.white, size: 28),
-                    SizedBox(width: 12),
-                    Text(
-                      "Add New Routine",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: list.isEmpty ? _buildEmptyState() : _buildTimeline(list),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+  // Sleek Timeline path with nodes
+  Widget _buildTimeline(List<Routine> routines) {
+    return AnimationLimiter(
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        physics: const BouncingScrollPhysics(),
+        itemCount: routines.length,
+        itemBuilder: (context, index) {
+          final r = routines[index];
+          final Color accent = typeColors[r.type] ?? Colors.blueAccent;
+
+          return AnimationConfiguration.staggeredList(
+            position: index,
+            duration: const Duration(milliseconds: 450),
+            child: SlideAnimation(
+              verticalOffset: 40.0,
+              child: FadeInAnimation(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Subject
-                    const Text("Subject", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: titleController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: "Enter subject name",
-                        filled: true,
-                        fillColor: const Color(0xff334155),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        prefixIcon: const Icon(Icons.book_rounded, color: Colors.blue),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Location
-                    const Text("Location / Description", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: locationController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: "Description or place",
-                        filled: true,
-                        fillColor: const Color(0xff334155),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        prefixIcon: const Icon(Icons.location_on_rounded, color: Colors.blue),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Type Selection (Chips)
-                    const Text("Type", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: routineTypes.map((type) {
-                        final bool isSelected = selectedType == type;
-                        final Color color = typeColors[type] ?? Colors.blue;
-
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedType = type;
-                            });
-                          },
-                          child: Chip(
-                            label: Text(
-                              type,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.white70,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                            backgroundColor: isSelected ? color : const Color(0xff475569),
-                            side: BorderSide(
-                              color: isSelected ? color : Colors.transparent,
-                              width: 2,
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Time Pickers
-                    const Text("Time", style: TextStyle(color: Colors.white70, fontSize: 14)),
-                    const SizedBox(height: 12),
-                    Row(
+                    // Timeline Node
+                    Column(
                       children: [
-                        Expanded(
-                          child: _buildTimeButton(
-                            label: "Start Time",
-                            time: startTime,
-                            onTap: () async {
-                              TimeOfDay? picked = await showTimePicker(
-                                context: context,
-                                initialTime: startTime ?? TimeOfDay.now(),
-                              );
-                              if (picked != null) {
-                                setState(() => startTime = picked);
-                              }
-                            },
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: accent,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: accent.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildTimeButton(
-                            label: "End Time",
-                            time: endTime,
-                            onTap: () async {
-                              TimeOfDay? picked = await showTimePicker(
-                                context: context,
-                                initialTime: endTime ?? TimeOfDay.now(),
-                              );
-                              if (picked != null) {
-                                setState(() => endTime = picked);
-                              }
-                            },
+                        Container(
+                          width: 2,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [accent, Colors.white10],
+                            ),
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(width: 16),
+
+                    // Main Info Card
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _showClassDetailsDrawer(r),
+                        child: _buildGlassCard(
+                          opacity: 0.06,
+                          borderColor: accent.withOpacity(0.18),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Title and Icon
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        r.title,
+                                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Icon(typeIcons[r.type] ?? Icons.book, color: accent.withOpacity(0.8), size: 18),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Room details
+                                Text(
+                                  r.location.isNotEmpty ? r.location : "No Location Details",
+                                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Time and Attendance Check-In row
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "${r.startTime} — ${r.endTime}",
+                                      style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.bold),
+                                    ),
+
+                                    // Attendance trigger
+                                    GestureDetector(
+                                      onTap: () {
+                                        if (r.isCheckedIn) return;
+                                        _controller.checkIn(r, (updated) async {
+                                          if (r.id != null) {
+                                            await firestore.collection("routine").doc(r.id).update({
+                                              "isCheckedIn": true,
+                                            });
+                                          }
+                                          _playCelebration();
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: r.isCheckedIn ? Colors.emerald.withOpacity(0.15) : accent.withOpacity(0.1),
+                                          border: Border.all(
+                                            color: r.isCheckedIn ? Colors.emerald : accent,
+                                            width: 1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              r.isCheckedIn ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
+                                              size: 11,
+                                              color: r.isCheckedIn ? Colors.emerald : accent,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              r.isCheckedIn ? "ATTENDED (+35 XP)" : "CHECK IN (+35 XP)",
+                                              style: TextStyle(
+                                                color: r.isCheckedIn ? Colors.emerald : accent,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-              // Action Buttons
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: const Text("Cancel", style: TextStyle(fontSize: 16, color: Colors.white)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (titleController.text.trim().isEmpty || locationController.text.trim().isEmpty) {
-                            AwesomeDialog(
-                              context: context,
-                              dialogType: DialogType.warning,
-                              title: "Missing Info",
-                              desc: "Please enter Subject and Location/Description",
-                              btnOkText: "OK",
-                              btnOkOnPress: () {},
-                            ).show();
-                            return;
-                          }
-                          if (startTime == null || endTime == null) {
-                            AwesomeDialog(
-                              context: context,
-                              dialogType: DialogType.warning,
-                              title: "Missing Time",
-                              desc: "Please select Start and End Time",
-                              btnOkText: "OK",
-                              btnOkOnPress: () {},
-                            ).show();
-                            return;
-                          }
+  // Schedule empty state
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.02),
+            ),
+            child: const Icon(Icons.school_outlined, size: 72, color: Colors.white12),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            "No classes scheduled",
+            style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            "Tap + to customize your daily timetable 📚",
+            style: TextStyle(color: Colors.white30, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
 
-                          saveRoutine();
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xff3b82f6),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 8,
-                        ),
-                        child: const Text(
-                          "Save Routine",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF030712), // Deep carbon cyber color
+      body: Stack(
+        children: [
+          // Background soft glows
+          Positioned(
+            top: -100,
+            right: -80,
+            child: CircleAvatar(radius: 180, backgroundColor: Colors.blue.withOpacity(0.04)),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -80,
+            child: CircleAvatar(radius: 180, backgroundColor: Colors.purple.withOpacity(0.03)),
+          ),
+
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                _buildWeekStrip(),
+                const SizedBox(height: 15),
+                Expanded(child: _buildRoutineList()),
+              ],
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddRoutineSheet,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Colors.blueAccent, Colors.blue]),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blueAccent.withOpacity(0.4),
+                blurRadius: 15,
+                spreadRadius: 2,
+              )
             ],
           ),
+          child: const Icon(Icons.add_rounded, size: 30, color: Colors.white),
         ),
       ),
     );
   }
-// Helper Widget for Time Buttons
-  Widget _buildTimeButton({
-    required String label,
-    required TimeOfDay? time,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.withOpacity(0.15), Colors.blue.withOpacity(0.05)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.blue.withOpacity(0.4)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: Colors.white60),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              time == null ? "-- : --" : time.format(context),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void saveRoutine() async {
-    DateTime date = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-    );
-
-    await FirebaseFirestore.instance.collection("routine").add({
-      "title": titleController.text.trim(),
-      "location": locationController.text.trim(),
-      "type": selectedType,
-      "startTime": startTime?.format(context),
-      "endTime": endTime?.format(context),
-      "date": Timestamp.fromDate(date),
-      "createdAt": FieldValue.serverTimestamp(),
-    });
-  }
-
 }
