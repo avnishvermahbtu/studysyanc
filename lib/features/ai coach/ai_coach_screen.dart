@@ -42,7 +42,6 @@ class AICoachScreen extends StatelessWidget {
                   .snapshots(),
 
               builder: (context, snapshot) {
-
                 if (!snapshot.hasData) {
                   return _buildCard(
                     title: "Today's Plan",
@@ -52,26 +51,27 @@ class AICoachScreen extends StatelessWidget {
                 }
 
                 final docs = snapshot.data!.docs;
+                final todayTasks = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  if (data['dueDateTime'] == null) return false;
+                  final due = (data['dueDateTime'] as Timestamp).toDate();
+                  return DateUtils.isSameDay(due, DateTime.now());
+                }).toList();
 
-                if (docs.isEmpty) {
+                if (todayTasks.isEmpty) {
                   return _buildCard(
                     title: "Today's Plan",
                     icon: Icons.calendar_today,
-                    content:
-                    "🎉 No tasks for today.\nEnjoy your day!",
+                    content: "🎉 No tasks for today.\nEnjoy your day!",
                   );
                 }
 
                 String content = "";
 
-                for (var doc in docs.take(3)) {
+                for (var doc in todayTasks.take(3)) {
+                  final data = doc.data() as Map<String, dynamic>;
 
-                  final data =
-                  doc.data()
-                  as Map<String,dynamic>;
-
-                  content +=
-                  "📚 ${data['title']}\n"
+                  content += "📚 ${data['title']}\n"
                       "⭐ ${data['priority']}\n\n";
                 }
 

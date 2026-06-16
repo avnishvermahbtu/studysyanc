@@ -1,8 +1,10 @@
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui';
+import 'package:confetti/confetti.dart';
 import '../models/task_model.dart';
 import 'ai_service.dart';
 import 'task_detail_page.dart';
@@ -23,6 +25,8 @@ class _TaskScreenState extends State<TaskScreen> {
   String selectedFilter = 'All';
   Set<String> expandedTaskIds = {};
   late FocusController _focusController;
+  late ConfettiController _confettiController;
+  int _currentLevel = 1;
 
   // Premium Theme Colors
   final Color primaryColor = const Color(0xff6366f1);
@@ -34,6 +38,8 @@ class _TaskScreenState extends State<TaskScreen> {
     super.initState();
     _focusController = FocusController();
     _focusController.addListener(_onFocusUpdate);
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    _currentLevel = _focusController.level;
   }
 
   @override
@@ -41,16 +47,57 @@ class _TaskScreenState extends State<TaskScreen> {
     _focusController.removeListener(_onFocusUpdate);
     titleController.dispose();
     descController.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
   void _onFocusUpdate() {
     if (mounted) {
+      if (_focusController.level > _currentLevel) {
+        _currentLevel = _focusController.level;
+        _triggerLevelUpCelebration();
+      }
       setState(() {});
     }
   }
 
+  void _triggerLevelUpCelebration() {
+    _confettiController.play();
+    HapticFeedback.heavyImpact();
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.success,
+      animType: AnimType.bottomSlide,
+      body: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        child: Column(
+          children: [
+            const Text(
+              'LEVEL UP! 👑',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.amberAccent,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Congratulations! You reached Level ${_focusController.level} Practitioner!\nKeep up the incredible work! 🔥',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+            ),
+          ],
+        ),
+      ),
+      btnOkText: "Let's Go!",
+      btnOkColor: const Color(0xff6366f1),
+      btnOkOnPress: () {},
+    ).show();
+  }
+
   void _rewardXp(int amount, String taskTitle) {
+    _confettiController.play();
     _focusController.addXp(amount);
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -152,7 +199,9 @@ class _TaskScreenState extends State<TaskScreen> {
         barrierDismissible: false,
         builder: (context) => PopScope(
           canPop: false,
-          child: Center(
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 40),
             child: glassContainer(
               blur: 20,
               opacity: 0.15,
@@ -374,6 +423,23 @@ class _TaskScreenState extends State<TaskScreen> {
               child: CircleAvatar(
                   radius: 150,
                   backgroundColor: Colors.blue.withOpacity(0.05))),
+
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [
+                Colors.green,
+                Colors.blue,
+                Colors.pink,
+                Colors.orange,
+                Colors.purple,
+                Colors.yellow
+              ],
+            ),
+          ),
 
           SafeArea(
             child: Column(
@@ -956,13 +1022,16 @@ class _TaskScreenState extends State<TaskScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              "No subtask strategy generated.",
-                              style: TextStyle(
-                                  color: Colors.white38,
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic),
+                            Expanded(
+                              child: const Text(
+                                "No subtask strategy generated.",
+                                style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic),
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             TextButton.icon(
                               onPressed: () async {
                                 showDialog(
@@ -970,7 +1039,9 @@ class _TaskScreenState extends State<TaskScreen> {
                                   barrierDismissible: false,
                                   builder: (context) => PopScope(
                                     canPop: false,
-                                    child: Center(
+                                    child: Dialog(
+                                      backgroundColor: Colors.transparent,
+                                      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
                                       child: glassContainer(
                                         blur: 20,
                                         opacity: 0.15,
@@ -981,8 +1052,7 @@ class _TaskScreenState extends State<TaskScreen> {
                                             children: [
                                               const CircularProgressIndicator(
                                                 valueColor:
-                                                    AlwaysStoppedAnimation<
-                                                        Color>(
+                                                    AlwaysStoppedAnimation<Color>(
                                                         Color(0xff6366f1)),
                                               ),
                                               const SizedBox(height: 24),

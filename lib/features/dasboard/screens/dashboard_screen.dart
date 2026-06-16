@@ -357,7 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         final allTasks = snapshot.data!.docs
             .map((doc) => Task.fromMap(doc.data() as Map<String, dynamic>, doc.id))
-            .where((t) => !t.isDone) // Only show incomplete ones
+            .where((t) => !t.isDone && t.dueDateTime != null && DateUtils.isSameDay(t.dueDateTime, DateTime.now()))
             .toList();
 
         if (allTasks.isEmpty) {
