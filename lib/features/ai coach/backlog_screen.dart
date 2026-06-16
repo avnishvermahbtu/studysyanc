@@ -565,26 +565,32 @@ class _BacklogScreenState extends State<BacklogScreen> {
                       runSpacing: 8,
                       children: subjects.map((sub) {
                         final isSelected = dialogSubject == sub;
-                        return ChoiceChip(
-                          label: Text(sub),
-                          selected: isSelected,
-                          selectedColor: const Color(0xff6366f1).withOpacity(0.3),
-                          backgroundColor: Colors.transparent,
-                          side: BorderSide(
-                            color: isSelected ? const Color(0xff6366f1) : Colors.white10,
-                          ),
-                          labelStyle: TextStyle(
-                            color: isSelected ? const Color(0xffc7d2fe) : Colors.white70,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) {
-                              setDialogState(() {
-                                dialogSubject = sub;
-                              });
-                            }
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              dialogSubject = sub;
+                            });
                           },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xff6366f1) : const Color(0xff1e293b),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xff6366f1) : Colors.white10,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              sub,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         );
                       }).toList(),
                     ),
@@ -650,26 +656,32 @@ class _BacklogScreenState extends State<BacklogScreen> {
                       runSpacing: 8,
                       children: minutesOptions.map((mins) {
                         final isSelected = dialogMinutes == mins;
-                        return ChoiceChip(
-                          label: Text("${mins}m"),
-                          selected: isSelected,
-                          selectedColor: const Color(0xff10b981).withOpacity(0.2),
-                          backgroundColor: Colors.transparent,
-                          side: BorderSide(
-                            color: isSelected ? const Color(0xff10b981) : Colors.white10,
-                          ),
-                          labelStyle: TextStyle(
-                            color: isSelected ? const Color(0xffa7f3d0) : Colors.white70,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) {
-                              setDialogState(() {
-                                dialogMinutes = mins;
-                              });
-                            }
+                        return GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              dialogMinutes = mins;
+                            });
                           },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xff10b981) : const Color(0xff1e293b),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xff10b981) : Colors.white10,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              "${mins}m",
+                              style: TextStyle(
+                                color: isSelected ? Colors.black : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         );
                       }).toList(),
                     ),

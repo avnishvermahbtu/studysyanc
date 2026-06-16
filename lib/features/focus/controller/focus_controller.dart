@@ -31,9 +31,21 @@ class FocusController extends ChangeNotifier {
   String _lastDate = "";
   int _xp = 0;
   int _level = 1;
+  int _dailyStudyGoal = 240; // Default daily goal in minutes (4 hours)
 
   // Weekly study sessions counter
   Map<String, int> _weeklyData = {
+    "Mon": 0,
+    "Tue": 0,
+    "Wed": 0,
+    "Thu": 0,
+    "Fri": 0,
+    "Sat": 0,
+    "Sun": 0,
+  };
+
+  // Weekly study minutes counter
+  Map<String, int> _weeklyMinutes = {
     "Mon": 0,
     "Tue": 0,
     "Wed": 0,
@@ -62,7 +74,9 @@ class FocusController extends ChangeNotifier {
   String get lastDate => _lastDate;
   int get xp => _xp;
   int get level => _level;
+  int get dailyStudyGoal => _dailyStudyGoal;
   Map<String, int> get weeklyData => _weeklyData;
+  Map<String, int> get weeklyMinutes => _weeklyMinutes;
   bool get isSoundscapeActive => _isSoundscapeActive;
   String get activeSoundscape => _activeSoundscape;
 
@@ -75,6 +89,7 @@ class FocusController extends ChangeNotifier {
     _lastDate = prefs.getString("lastDate") ?? "";
     _xp = prefs.getInt("focus_xp") ?? 0;
     _level = prefs.getInt("focus_level") ?? 1;
+    _dailyStudyGoal = prefs.getInt("daily_study_goal") ?? 240;
 
     // Load Theme
     final themeStr = prefs.getString("focus_theme") ?? "forest";
@@ -101,6 +116,17 @@ class FocusController extends ChangeNotifier {
       "Sun": prefs.getInt("Sun") ?? 0,
     };
 
+    // Load weekly session minutes
+    _weeklyMinutes = {
+      "Mon": prefs.getInt("Mon_minutes") ?? ((prefs.getInt("Mon") ?? 0) * 25),
+      "Tue": prefs.getInt("Tue_minutes") ?? ((prefs.getInt("Tue") ?? 0) * 25),
+      "Wed": prefs.getInt("Wed_minutes") ?? ((prefs.getInt("Wed") ?? 0) * 25),
+      "Thu": prefs.getInt("Thu_minutes") ?? ((prefs.getInt("Thu") ?? 0) * 25),
+      "Fri": prefs.getInt("Fri_minutes") ?? ((prefs.getInt("Fri") ?? 0) * 25),
+      "Sat": prefs.getInt("Sat_minutes") ?? ((prefs.getInt("Sat") ?? 0) * 25),
+      "Sun": prefs.getInt("Sun_minutes") ?? ((prefs.getInt("Sun") ?? 0) * 25),
+    };
+
     notifyListeners();
   }
 
@@ -118,6 +144,14 @@ class FocusController extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("focus_category", category.toString().split('.').last);
+  }
+
+  // Set Daily Study Goal in minutes
+  Future<void> setDailyStudyGoal(int minutes) async {
+    _dailyStudyGoal = minutes;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt("daily_study_goal", minutes);
   }
 
   // Toggle ambient soundscapes
@@ -195,7 +229,8 @@ class FocusController extends ChangeNotifier {
 
     // Save streak & updates
     await updateStreak();
-    await updateWeekly();
+    final focusMinutes = _maxSeconds ~/ 60;
+    await updateWeekly(focusMinutes);
 
     // Call onSessionCompleted callback
     onSessionCompleted?.call();
@@ -281,13 +316,17 @@ class FocusController extends ChangeNotifier {
   }
 
   // Update Weekly Completion stats
-  Future<void> updateWeekly() async {
+  Future<void> updateWeekly(int completedMinutes) async {
     final prefs = await SharedPreferences.getInstance();
     final days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     final day = days[DateTime.now().weekday % 7];
 
     _weeklyData[day] = (_weeklyData[day] ?? 0) + 1;
     await prefs.setInt(day, _weeklyData[day]!);
+
+    _weeklyMinutes[day] = (_weeklyMinutes[day] ?? 0) + completedMinutes;
+    await prefs.setInt("${day}_minutes", _weeklyMinutes[day]!);
+
     notifyListeners();
   }
 

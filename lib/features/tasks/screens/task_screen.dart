@@ -311,18 +311,32 @@ class _TaskScreenState extends State<TaskScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: ["Low", "Medium", "High"]
-                        .map((p) => ChoiceChip(
-                              label: Text(p),
-                              selected: selectedPriority == p,
-                              onSelected: (val) =>
-                                  setSheetState(() => selectedPriority = p),
-                              selectedColor: primaryColor,
-                              labelStyle: TextStyle(
-                                  color: selectedPriority == p
-                                      ? Colors.white
-                                      : Colors.white54),
-                              backgroundColor: accentColor,
-                            ))
+                        .map((p) {
+                          final isSelected = selectedPriority == p;
+                          return GestureDetector(
+                            onTap: () => setSheetState(() => selectedPriority = p),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected ? primaryColor : accentColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected ? primaryColor : Colors.white10,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                p,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.white54,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          );
+                        })
                         .toList(),
                   ),
                   const SizedBox(height: 20),

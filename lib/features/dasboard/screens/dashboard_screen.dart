@@ -36,6 +36,146 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _showEditGoalDialog() {
+    int selectedMinutes = _focusController.dailyStudyGoal;
+    final presets = [60, 120, 180, 240, 360, 480]; // 1h, 2h, 3h, 4h, 6h, 8h
+    final customController = TextEditingController(text: selectedMinutes.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xff0f172a),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: Colors.white10),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.track_changes_rounded, color: Color(0xff6366f1)),
+                  SizedBox(width: 10),
+                  Text(
+                    "Set Daily Goal",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Choose a daily study goal:",
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Presets Grid
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: presets.map((mins) {
+                        final isSelected = selectedMinutes == mins;
+                        final int hours = mins ~/ 60;
+                        return GestureDetector(
+                          onTap: () {
+                            setModalState(() {
+                              selectedMinutes = mins;
+                              customController.text = mins.toString();
+                            });
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xff6366f1) : const Color(0xff1e293b),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xff6366f1) : Colors.white10,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              "${hours}h",
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white70,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Custom Minutes Input
+                    TextField(
+                      controller: customController,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        labelText: "Custom Minutes",
+                        labelStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                        prefixIcon: const Icon(Icons.timer_outlined, color: Colors.white54),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white24),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xff6366f1)),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        final parsed = int.tryParse(val);
+                        if (parsed != null && parsed > 0) {
+                          setModalState(() {
+                            selectedMinutes = parsed;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff6366f1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  ),
+                  onPressed: () async {
+                    if (selectedMinutes > 0) {
+                      await _focusController.setDailyStudyGoal(selectedMinutes);
+                      if (mounted) setState(() {});
+                    }
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    "Set Goal",
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Color getPriorityColor(String priority) {
     switch (priority) {
       case "High":
@@ -53,9 +193,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     final dayKey = days[DateTime.now().weekday % 7];
-    final sessionsToday = _focusController.weeklyData[dayKey] ?? 0;
-    final minutesToday = sessionsToday * 25;
-    const double goalMinutes = 240.0; // 4 hours goal
+    final minutesToday = _focusController.weeklyMinutes[dayKey] ?? 0;
+    final double goalMinutes = _focusController.dailyStudyGoal.toDouble();
     final double progressPct = (minutesToday / goalMinutes).clamp(0.0, 1.0);
 
     return Scaffold(
@@ -162,73 +301,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildProgressCard(int minutesToday, double progressPct) {
     final int h = minutesToday ~/ 60;
     final int m = minutesToday % 60;
+    
+    final int goalMins = _focusController.dailyStudyGoal;
+    final int goalH = goalMins ~/ 60;
+    final int goalM = goalMins % 60;
+    final String goalText = goalM == 0 ? "$goalH hours" : "${goalH}h ${goalM}m";
 
-    return DashboardCard(
-      glowColor: const Color(0xff6366f1),
-      bgOpacity: 0.08,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: _showEditGoalDialog,
+      child: DashboardCard(
+        glowColor: const Color(0xff6366f1),
+        bgOpacity: 0.08,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "TODAY'S STUDY GOAL",
+                      style: TextStyle(
+                        color: Color(0xff6366f1),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      h > 0 ? "${h}h ${m}m" : "${m}m",
+                      style: const TextStyle(
+                        fontSize: 32,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text(
+                          "Daily Goal: $goalText",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.edit_rounded,
+                          color: const Color(0xff6366f1).withOpacity(0.6),
+                          size: 13,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Stack(
+                alignment: Alignment.center,
                 children: [
-                  const Text(
-                    "TODAY'S STUDY GOAL",
-                    style: TextStyle(
-                      color: Color(0xff6366f1),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                  SizedBox(
+                    height: 85,
+                    width: 85,
+                    child: CircularProgressIndicator(
+                      value: progressPct,
+                      strokeWidth: 8,
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
                     ),
                   ),
-                  const SizedBox(height: 10),
                   Text(
-                    h > 0 ? "${h}h ${m}m" : "${m}m",
+                    "${(progressPct * 100).toInt()}%",
                     style: const TextStyle(
-                      fontSize: 32,
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    "Daily Goal: 4 hours",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 13,
+                      fontSize: 16,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 16),
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  height: 85,
-                  width: 85,
-                  child: CircularProgressIndicator(
-                    value: progressPct,
-                    strokeWidth: 8,
-                    backgroundColor: Colors.white.withOpacity(0.05),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
-                  ),
-                ),
-                Text(
-                  "${(progressPct * 100).toInt()}%",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
