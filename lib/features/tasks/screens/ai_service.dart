@@ -54,19 +54,7 @@ Example response format:
         return _fallbackSubtasks(title);
       }
 
-      // Clean up markdown block if present
-      String cleanedText = responseText;
-      if (cleanedText.startsWith("```")) {
-        final lines = cleanedText.split('\n');
-        if (lines.isNotEmpty && lines.first.startsWith("```")) {
-          lines.removeAt(0);
-        }
-        if (lines.isNotEmpty && lines.last.startsWith("```")) {
-          lines.removeLast();
-        }
-        cleanedText = lines.join('\n').trim();
-      }
-
+      String cleanedText = _cleanJsonString(responseText);
       final dynamic decoded = jsonDecode(cleanedText);
       if (decoded is List) {
         return decoded.map((e) => e.toString().trim()).toList();
@@ -75,6 +63,116 @@ Example response format:
     } catch (e) {
       return _fallbackSubtasks(title);
     }
+  }
+
+  Future<String> generateRoadmap(String topic, String timeline) async {
+    final prompt = """
+You are an expert academic mentor and study strategist for NEET/JEE.
+Goal: Create a highly structured, milestone-based study roadmap/plan for:
+Topic/Subject: $topic
+Target Timeline: $timeline
+
+Provide the roadmap as a valid JSON object with the following schema:
+{
+  "title": "Roadmap Title",
+  "description": "Short overview of the roadmap strategy and tips",
+  "milestones": [
+    {
+      "dayOrWeek": "Week 1" or "Day 1" or "Step 1",
+      "title": "Milestone title",
+      "tasks": [
+        "Task 1 to complete",
+        "Task 2 to complete",
+        "Task 3 to complete"
+      ]
+    }
+  ]
+}
+
+Return ONLY the raw valid JSON. Do not include markdown code block syntax (like ```json or ```), explainers, or any additional text.
+""";
+
+    try {
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim() ?? "";
+      return _cleanJsonString(text);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  Future<String> generateQuiz(String notesOrTopic, int questionCount, String difficulty) async {
+    final prompt = """
+You are an academic examiner for NEET/JEE.
+Goal: Generate exactly $questionCount multiple-choice questions (MCQs) of $difficulty difficulty based on the following notes, syllabus, or topic:
+---
+$notesOrTopic
+---
+
+Provide the quiz as a valid JSON array of objects. Each object must follow this schema:
+{
+  "question": "Question text here?",
+  "options": [
+    "Option 1 text",
+    "Option 2 text",
+    "Option 3 text",
+    "Option 4 text"
+  ],
+  "correctIndex": 0, // Integer index (0 to 3) representing the correct option in options array
+  "explanation": "Brief academic explanation of why this answer is correct."
+}
+
+Return ONLY the raw valid JSON. Do not include markdown code block syntax (like ```json or ```), explainers, or any additional text.
+""";
+
+    try {
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim() ?? "";
+      return _cleanJsonString(text);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  Future<String> generateCoachingMessage({
+    required int minutesToday,
+    required int pendingBacklogs,
+    required int focusLevel,
+    required String focusRank,
+    required List<String> todayTasks,
+  }) async {
+    final tasksText = todayTasks.isEmpty ? "None scheduled" : todayTasks.join(", ");
+    final prompt = """
+You are "Sync", an elite AI study coach and academic mentor for JEE/NEET students. Your tone is highly motivational, energetic, clear, and direct.
+Provide a quick study assessment and 1-2 actionable, concise recommendations for the student today based on their metrics:
+- Minutes Studied Today: $minutesToday m
+- Pending Backlog Chapters: $pendingBacklogs
+- Focus Level: Level $focusLevel ($focusRank)
+- Today's Target Tasks: $tasksText
+
+Write a very brief, high-impact coaching advice (maximum 3 sentences). Do not include markdown code block syntax, headers, or explainers.
+""";
+
+    try {
+      final response = await model.generateContent([Content.text(prompt)]);
+      return response.text?.trim() ?? "Ready to conquer today's study block? Pick a task, start focus zone, and let's crush it! ⚡";
+    } catch (e) {
+      return "Ready to conquer today's study block? Pick a task, start focus zone, and let's crush it! ⚡";
+    }
+  }
+
+  String _cleanJsonString(String text) {
+    if (text.startsWith("```")) {
+      final lines = text.split('\n');
+      if (lines.isNotEmpty && lines.first.startsWith("```")) {
+        lines.removeAt(0);
+      }
+      if (lines.isNotEmpty && lines.last.startsWith("```")) {
+        lines.removeLast();
+      }
+      text = lines.join('\n').trim();
+    }
+    return text;
   }
 
   List<String> _fallbackSubtasks(String title) {
