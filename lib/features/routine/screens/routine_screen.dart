@@ -443,6 +443,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
   void _showClassDetailsDrawer(Routine routine) {
     final TextEditingController notesFieldController = TextEditingController(text: routine.notes);
     final Color accent = typeColors[routine.type] ?? Colors.blueAccent;
+    bool isDeleted = false;
 
     showModalBottomSheet(
       context: context,
@@ -549,7 +550,6 @@ class _RoutineScreenState extends State<RoutineScreen> {
                       // Delete Class
                       GestureDetector(
                         onTap: () {
-                          Navigator.pop(context);
                           AwesomeDialog(
                             context: context,
                             dialogType: DialogType.warning,
@@ -557,6 +557,8 @@ class _RoutineScreenState extends State<RoutineScreen> {
                             desc: "Are you sure you want to delete ${routine.title}?",
                             btnCancelOnPress: () {},
                             btnOkOnPress: () {
+                              isDeleted = true;
+                              Navigator.pop(context);
                               if (routine.id != null) {
                                 firestore.collection("routine").doc(routine.id).delete();
                               }
@@ -581,13 +583,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
                               foregroundColor: Colors.black,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
-                            onPressed: () async {
-                              final text = notesFieldController.text.trim();
-                              if (routine.id != null) {
-                                await firestore.collection("routine").doc(routine.id).update({
-                                  "notes": text,
-                                });
-                              }
+                            onPressed: () {
                               Navigator.pop(context);
                             },
                             child: const Text(
@@ -605,7 +601,19 @@ class _RoutineScreenState extends State<RoutineScreen> {
           ),
         );
       },
-    );
+    ).then((_) async {
+      if (!isDeleted && routine.id != null) {
+        try {
+          final text = notesFieldController.text.trim();
+          await firestore.collection("routine").doc(routine.id).update({
+            "notes": text,
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
+      notesFieldController.dispose();
+    });
   }
 
   // Redesigned Add Routine bottom sheet
