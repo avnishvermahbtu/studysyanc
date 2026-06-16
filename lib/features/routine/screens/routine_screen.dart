@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../controller/routine_controller.dart';
 import 'routine_model.dart';
 
@@ -28,6 +30,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
   TimeOfDay? endTime;
 
   late RoutineController _controller;
+  String _studentName = "Student";
 
   final Map<String, Color> typeColors = {
     "Lecture": Colors.blueAccent,
@@ -50,6 +53,33 @@ class _RoutineScreenState extends State<RoutineScreen> {
     super.initState();
     _controller = RoutineController();
     _controller.addListener(_onControllerUpdate);
+    _loadStudentName();
+  }
+
+  Future<void> _loadStudentName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final localName = prefs.getString('student_name');
+    if (localName != null && localName.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _studentName = localName;
+        });
+      }
+    } else {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.reload();
+        final updatedUser = FirebaseAuth.instance.currentUser;
+        if (updatedUser?.displayName != null && updatedUser!.displayName!.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _studentName = updatedUser.displayName!;
+            });
+          }
+          await prefs.setString('student_name', updatedUser.displayName!);
+        }
+      }
+    }
   }
 
   void _onControllerUpdate() {
@@ -254,7 +284,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "${_controller.getGreeting()}, Avnesh 👋",
+                "${_controller.getGreeting()}, $_studentName 👋",
                 style: const TextStyle(
                   color: Colors.white54,
                   fontSize: 14,

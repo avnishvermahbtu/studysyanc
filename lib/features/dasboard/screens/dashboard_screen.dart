@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:studysync/login_page.dart';
 
 import '../../tasks/models/task_model.dart';
 import '../../focus/controller/focus_controller.dart';
 import '../widgets/dashboard_card.dart';
+import '../../ai coach/roadmap_screen.dart';
+import '../../ai coach/backlog_screen.dart';
+import '../../ai coach/notes_to_quiz_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -16,12 +22,40 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   late FocusController _focusController;
+  String _studentName = "Student";
 
   @override
   void initState() {
     super.initState();
     _focusController = FocusController();
     _focusController.addListener(_onFocusUpdate);
+    _loadStudentName();
+  }
+
+  Future<void> _loadStudentName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final localName = prefs.getString('student_name');
+    if (localName != null && localName.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _studentName = localName;
+        });
+      }
+    } else {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.reload();
+        final updatedUser = FirebaseAuth.instance.currentUser;
+        if (updatedUser?.displayName != null && updatedUser!.displayName!.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _studentName = updatedUser.displayName!;
+            });
+          }
+          await prefs.setString('student_name', updatedUser.displayName!);
+        }
+      }
+    }
   }
 
   @override
@@ -257,7 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Welcome Back 👋",
+              "Welcome Back, $_studentName 👋",
               style: TextStyle(
                 color: Colors.white.withOpacity(0.5),
                 fontSize: 14,
@@ -277,19 +311,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         Row(
           children: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none_rounded, color: Colors.white70),
-              onPressed: () {},
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xff6366f1).withOpacity(0.3), width: 2),
-              ),
-              child: const CircleAvatar(
-                radius: 20,
-                backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+            GestureDetector(
+              onTap: () => _showSettingsBottomSheet(context),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xff6366f1).withOpacity(0.12),
+                  border: Border.all(color: const Color(0xff6366f1).withOpacity(0.4), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff6366f1).withOpacity(0.2),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    )
+                  ],
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: Color(0xffa5b4fc),
+                  size: 20,
+                ),
               ),
             ),
           ],
@@ -621,29 +663,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "icon": Icons.timer_outlined,
         "title": "Start Focus",
         "subtitle": "Pomodoro Timer",
-        "tabIndex": 3,
+        "onTap": () => widget.onNavigate?.call(3),
         "color": const Color(0xff6366f1),
       },
       {
         "icon": Icons.calendar_today_outlined,
         "title": "Timetable",
         "subtitle": "Daily Schedule",
-        "tabIndex": 2,
+        "onTap": () => widget.onNavigate?.call(2),
         "color": Colors.greenAccent,
       },
       {
         "icon": Icons.task_outlined,
         "title": "Questboard",
         "subtitle": "Add Study Tasks",
-        "tabIndex": 1,
+        "onTap": () => widget.onNavigate?.call(1),
         "color": Colors.amberAccent,
       },
       {
         "icon": Icons.smart_toy_outlined,
         "title": "AI Coach",
-        "subtitle": "Backlog Recovery",
-        "tabIndex": 4,
+        "subtitle": "Holographic Mentor",
+        "onTap": () => widget.onNavigate?.call(4),
         "color": Colors.pinkAccent,
+      },
+      {
+        "icon": Icons.route_rounded,
+        "title": "AI Roadmap",
+        "subtitle": "Milestone Routes",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RoadmapScreen())),
+        "color": const Color(0xff818cf8),
+      },
+      {
+        "icon": Icons.menu_book_rounded,
+        "title": "Backlog Plan",
+        "subtitle": "Recover Chapters",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BacklogScreen())),
+        "color": const Color(0xfffb923c),
+      },
+      {
+        "icon": Icons.quiz_rounded,
+        "title": "Quiz Arena",
+        "subtitle": "Textbook MCQs",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotesToQuizScreen())),
+        "color": const Color(0xff34d399),
       },
     ];
 
@@ -660,7 +723,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       itemBuilder: (context, idx) {
         final act = actions[idx];
         return DashboardCard(
-          onTap: () => widget.onNavigate?.call(act["tabIndex"]),
+          onTap: act["onTap"],
           bgOpacity: 0.06,
           glowColor: act["color"],
           child: Padding(
@@ -709,6 +772,282 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showSettingsBottomSheet(BuildContext context) {
+    final nameEditController = TextEditingController(text: _studentName);
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 30,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xff0f172a),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                border: Border(top: BorderSide(color: Colors.white10, width: 1.5)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Handle Bar
+                    Center(
+                      child: Container(
+                        width: 50,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Header title
+                    const Row(
+                      children: [
+                        Icon(Icons.settings_suggest_rounded, color: Color(0xff6366f1), size: 28),
+                        SizedBox(width: 12),
+                        Text(
+                          "App Settings",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 25),
+                    
+                    // Student Info Section
+                    const Text(
+                      "STUDENT PROFILE",
+                      style: TextStyle(
+                        color: Color(0xff6366f1),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // Name Field Edit
+                    TextField(
+                      controller: nameEditController,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        labelText: "Full Name",
+                        labelStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                        prefixIcon: const Icon(Icons.person_outline_rounded, color: Colors.white54),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xff10b981)),
+                          onPressed: () async {
+                            final newName = nameEditController.text.trim();
+                            if (newName.isNotEmpty) {
+                              // Save name
+                              final user = FirebaseAuth.instance.currentUser;
+                              if (user != null) {
+                                await user.updateDisplayName(newName);
+                                await user.reload();
+                              }
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setString('student_name', newName);
+                              
+                              setState(() {
+                                _studentName = newName;
+                              });
+                              setModalState(() {});
+                              
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Name updated to $newName successfully!"),
+                                    backgroundColor: const Color(0xff10b981),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.white12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Color(0xff6366f1)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Email
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.email_outlined, color: Colors.white54),
+                      title: const Text("Email Address", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      subtitle: Text(
+                        FirebaseAuth.instance.currentUser?.email ?? "Not logged in",
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    const Divider(color: Colors.white10, height: 30),
+                    
+                    // Preferences
+                    const Text(
+                      "PREFERENCES & GOALS",
+                      style: TextStyle(
+                        color: Color(0xff6366f1),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showEditGoalDialog();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.timer_outlined, color: Colors.white70),
+                                SizedBox(width: 12),
+                                Text("Edit Daily Study Goal", style: TextStyle(color: Colors.white, fontSize: 14)),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  "${_focusController.dailyStudyGoal} mins",
+                                  style: const TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.chevron_right_rounded, color: Colors.white30),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 35),
+                    
+                    // Logout button
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xffef4444).withOpacity(0.1),
+                        foregroundColor: const Color(0xffef4444),
+                        side: BorderSide(color: const Color(0xffef4444).withOpacity(0.3), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: () {
+                        _confirmLogout(context);
+                      },
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.logout_rounded, color: Color(0xffef4444)),
+                          SizedBox(width: 10),
+                          Text(
+                            "Log Out Session",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff0f172a),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.white10),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xffef4444)),
+              SizedBox(width: 10),
+              Text("Log Out", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            "Are you sure you want to log out of StudySync? Your local stats will remain saved.",
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xffef4444),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx); // close dialog
+                Navigator.pop(context); // close bottom sheet
+                
+                await FirebaseAuth.instance.signOut();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove('student_name'); // Clear name cache
+                
+                if (mounted) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
+                }
+              },
+              child: const Text("Log Out", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

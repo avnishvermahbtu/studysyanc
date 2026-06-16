@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:studysync/features/navigation/main_navigation_screen.dart';
 import 'package:studysync/features/routine/screens/routine_model.dart';
 import 'package:studysync/features/routine/screens/routine_screen.dart';
@@ -27,7 +28,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Firebase App',
-      home: MainNavigationScreen() ,
+      home: FirebaseAuth.instance.currentUser == null
+          ? const LoginPage()
+          : const MainNavigationScreen(),
     );
   }
 }
