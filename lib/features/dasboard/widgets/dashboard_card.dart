@@ -48,32 +48,26 @@ class _DashboardCardState extends State<DashboardCard>
 
   @override
   Widget build(BuildContext context) {
-    Widget card = ClipRRect(
-      borderRadius: BorderRadius.circular(widget.borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(widget.bgOpacity),
-            borderRadius: BorderRadius.circular(widget.borderRadius),
-            border: Border.all(
-              color: Colors.white.withOpacity(widget.borderOpacity),
-              width: 1,
-            ),
-            boxShadow: widget.glowColor != null
-                ? [
-                    BoxShadow(
-                      color: widget.glowColor!.withOpacity(0.15),
-                      blurRadius: 16,
-                      spreadRadius: -4,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : null,
-          ),
-          child: widget.child,
+    Widget card = Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(widget.bgOpacity + 0.01),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        border: Border.all(
+          color: Colors.white.withOpacity(widget.borderOpacity),
+          width: 1,
         ),
+        boxShadow: widget.glowColor != null
+            ? [
+                BoxShadow(
+                  color: widget.glowColor!.withOpacity(0.12),
+                  blurRadius: 16,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : null,
       ),
+      child: widget.child,
     );
 
     if (widget.onTap != null) {

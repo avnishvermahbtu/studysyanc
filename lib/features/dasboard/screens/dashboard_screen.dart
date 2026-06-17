@@ -11,6 +11,8 @@ import '../widgets/dashboard_card.dart';
 import '../../ai coach/roadmap_screen.dart';
 import '../../ai coach/backlog_screen.dart';
 import '../../ai coach/notes_to_quiz_screen.dart';
+import '../../analytics/screens/analytics_screen.dart';
+import '../../routine/screens/study_zones_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -298,19 +300,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              "Aao Parhein! 📚",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xff6366f1), Colors.pinkAccent],
+              ).createShader(bounds),
+              child: const Text(
+                "Ready to Conquer? ⚡",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ],
         ),
         Row(
           children: [
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen())),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.blue.withOpacity(0.12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.4), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.2),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    )
+                  ],
+                ),
+                child: const Icon(
+                  Icons.bar_chart_rounded,
+                  color: Color(0xff93c5fd),
+                  size: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
             GestureDetector(
               onTap: () => _showSettingsBottomSheet(context),
               child: Container(
@@ -707,6 +738,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "subtitle": "Textbook MCQs",
         "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotesToQuizScreen())),
         "color": const Color(0xff34d399),
+      },
+      {
+        "icon": Icons.add_location_alt_outlined,
+        "title": "Study Zones",
+        "subtitle": "Geofenced Reminders",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudyZonesScreen())),
+        "color": const Color(0xff10b981),
       },
     ];
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../ai coach/ai_coach_screen.dart';
 import '../dasboard/screens/dashboard_screen.dart';
@@ -36,70 +37,105 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Map<String, dynamic>> navigationItems = [
+      {"icon": Icons.home_rounded, "label": "Home"},
+      {"icon": Icons.task_alt_rounded, "label": "Quests"},
+      {"icon": Icons.calendar_today_rounded, "label": "Schedule"},
+      {"icon": Icons.timer_rounded, "label": "Focus"},
+      {"icon": Icons.forum_rounded, "label": "Coach"},
+    ];
+
     return Scaffold(
+      backgroundColor: const Color(0xff020617),
       body: screens[currentIndex],
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(30),
-          boxShadow: const [
+          color: const Color(0xff0f172a).withOpacity(0.9),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.08),
+            width: 1.2,
+          ),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 15,
-              spreadRadius: 2,
-            )
+              color: const Color(0xff6366f1).withOpacity(0.12),
+              blurRadius: 20,
+              spreadRadius: 1,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 12,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BottomNavigationBar(
-            currentIndex: currentIndex,
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            elevation: 0,
-            selectedItemColor: Colors.blue,
-            unselectedItemColor: Colors.black,
-            selectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-            onTap: (index) {
-              setState(() {
-                currentIndex = index;
-              });
-            },
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home),
-                label: "Home",
-              ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: List.generate(navigationItems.length, (index) {
+            final isSelected = currentIndex == index;
+            final item = navigationItems[index];
 
-              BottomNavigationBarItem(
-                icon: Icon(Icons.task_outlined),
-                activeIcon: Icon(Icons.task),
-                label: "Tasks",
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  currentIndex = index;
+                });
+              },
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xff6366f1).withOpacity(0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xff6366f1).withOpacity(0.3)
+                        : Colors.transparent,
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      item["icon"],
+                      color: isSelected ? const Color(0xff6366f1) : Colors.white38,
+                      size: 22,
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
+                      child: Row(
+                        children: [
+                          if (isSelected) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              item["label"],
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-
-              BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today_outlined),
-                activeIcon: Icon(Icons.calendar_today),
-                label: "Routine",
-              ),
-
-              BottomNavigationBarItem(
-                icon: Icon(Icons.timer_outlined),
-                activeIcon: Icon(Icons.timer),
-                label: "Focus",
-              ),
-
-              BottomNavigationBarItem(
-                icon: Icon(Icons.forum_outlined),
-                activeIcon: Icon(Icons.forum),
-                label: "Skill Swap",
-              ),
-            ],
-          ),
+            );
+          }),
         ),
       ),
     );

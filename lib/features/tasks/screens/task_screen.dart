@@ -135,22 +135,16 @@ class _TaskScreenState extends State<TaskScreen> {
     }
   }
 
-  // Refined Glassmorphism Tool
+  // Refined Glassmorphic Tool (Optimized for performance)
   Widget glassContainer(
       {required Widget child, double blur = 12, double opacity = 0.05}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: child,
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(opacity + 0.015),
+        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+        borderRadius: BorderRadius.circular(24),
       ),
+      child: child,
     );
   }
 
@@ -700,6 +694,79 @@ class _TaskScreenState extends State<TaskScreen> {
     );
   }
 
+  Widget _buildPriorityBadge(String priority) {
+    Color color = getPriorityColor(priority);
+    IconData icon;
+    switch (priority) {
+      case "High":
+        icon = Icons.whatshot_rounded;
+        break;
+      case "Medium":
+        icon = Icons.bolt_rounded;
+        break;
+      case "Low":
+        icon = Icons.eco_rounded;
+        break;
+      default:
+        icon = Icons.outlined_flag;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            priority,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildXpValueBadge(String priority) {
+    int xpAward = 15;
+    if (priority == "High") {
+      xpAward = 50;
+    } else if (priority == "Medium") {
+      xpAward = 30;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.stars_rounded, size: 12, color: Colors.amber),
+          const SizedBox(width: 4),
+          Text(
+            "+$xpAward XP",
+            style: const TextStyle(
+              color: Colors.amber,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTaskCard(Task task) {
     bool isOverdue =
         !task.isDone && task.dueDateTime != null && task.dueDateTime!.isBefore(DateTime.now());
@@ -710,13 +777,16 @@ class _TaskScreenState extends State<TaskScreen> {
     double progress =
         totalSubtasks > 0 ? completedSubtasks / totalSubtasks : 0.0;
 
+    Color borderAccentColor = getPriorityColor(task.priority);
+
     return Dismissible(
       key: Key(task.id!),
       direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-            color: Colors.redAccent, borderRadius: BorderRadius.circular(24)),
+            color: Colors.redAccent.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(24)),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
         child: const Icon(Icons.delete_sweep, color: Colors.white, size: 30),
@@ -724,437 +794,520 @@ class _TaskScreenState extends State<TaskScreen> {
       onDismissed: (_) => firestore.collection("tasks").doc(task.id).delete(),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
-        child: glassContainer(
-          opacity: 0.08,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () {
-                  setState(() {
-                    if (isExpanded) {
-                      expandedTaskIds.remove(task.id);
-                    } else {
-                      expandedTaskIds.add(task.id!);
-                    }
-                  });
-                },
-                borderRadius: BorderRadius.circular(24),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      GestureDetector(
-                        onTap: () async {
-                          bool newDone = !task.isDone;
-                          int xpAward = 0;
-                          if (newDone) {
-                            if (task.priority == "High") {
-                              xpAward = 50;
-                            } else if (task.priority == "Medium") {
-                              xpAward = 30;
-                            } else {
-                              xpAward = 15;
-                            }
-                            _rewardXp(xpAward, task.title);
-                          }
-
-                          List<SubTask> updatedSubtasks = List.from(task.subtasks);
-                          for (var sub in updatedSubtasks) {
-                            sub.isDone = newDone;
-                          }
-
-                          await firestore.collection("tasks").doc(task.id).update({
-                            'isDone': newDone,
-                            'subtasks':
-                                updatedSubtasks.map((s) => s.toMap()).toList(),
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color:
-                                task.isDone ? Colors.greenAccent : Colors.transparent,
-                            border: Border.all(
-                                color: task.isDone
-                                    ? Colors.greenAccent
-                                    : Colors.white24,
-                                width: 2),
-                          ),
-                          child: task.isDone
-                              ? const Icon(Icons.check, size: 14, color: Colors.black)
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              task.title,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                decoration: task.isDone ? TextDecoration.lineThrough : null,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_month,
-                                  size: 12,
-                                  color: isOverdue ? Colors.redAccent : Colors.white38,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  task.dueDateTime != null
-                                      ? DateFormat('MMM d • hh:mm a').format(task.dueDateTime!)
-                                      : "No Deadline",
-                                  style: TextStyle(
-                                      color:
-                                          isOverdue ? Colors.redAccent : Colors.white38,
-                                      fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: getPriorityColor(task.priority).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: getPriorityColor(task.priority)
-                                  .withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          task.priority,
-                          style: TextStyle(
-                              color: getPriorityColor(task.priority),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Icon(
-                        isExpanded
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        color: Colors.white54,
-                        size: 20,
-                      ),
-                    ],
-                  ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            colors: task.isDone
+                ? [
+                    Colors.greenAccent.withOpacity(0.04),
+                    Colors.greenAccent.withOpacity(0.01),
+                  ]
+                : [
+                    Colors.white.withOpacity(0.06),
+                    Colors.white.withOpacity(0.01),
+                  ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: task.isDone
+                ? Colors.greenAccent.withOpacity(0.2)
+                : Colors.white.withOpacity(0.08),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 5,
+                  color: task.isDone ? Colors.greenAccent : borderAccentColor,
                 ),
-              ),
-              if (!isExpanded && totalSubtasks > 0)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            backgroundColor: Colors.white10,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              progress == 1.0 ? Colors.greenAccent : primaryColor,
-                            ),
-                            minHeight: 4,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        "$completedSubtasks/$totalSubtasks Steps",
-                        style: TextStyle(
-                          color: progress == 1.0 ? Colors.greenAccent : Colors.white38,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (isExpanded) ...[
-                const Divider(color: Colors.white12, height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(20),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (task.description.isNotEmpty) ...[
-                        Text(
-                          task.description,
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 13,
-                              height: 1.4),
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (isExpanded) {
+                              expandedTaskIds.remove(task.id);
+                            } else {
+                              expandedTaskIds.add(task.id!);
+                            }
+                          });
+                        },
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(24),
+                          bottomRight: Radius.circular(24),
                         ),
-                        const SizedBox(height: 16),
-                      ],
-                      if (totalSubtasks > 0) ...[
-                        Row(
-                          children: [
-                            const Icon(Icons.auto_awesome,
-                                color: Color(0xff6366f1), size: 14),
-                            const SizedBox(width: 6),
-                            const Text(
-                              "AI STUDY STRATEGY",
-                              style: TextStyle(
-                                color: Color(0xff6366f1),
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(2),
-                                  child: LinearProgressIndicator(
-                                    value: progress,
-                                    backgroundColor: Colors.white10,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      progress == 1.0 ? Colors.greenAccent : primaryColor,
-                                    ),
-                                    minHeight: 4,
-                                  )),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              "${(progress * 100).toInt()}% Done",
-                              style: TextStyle(
-                                color: progress == 1.0 ? Colors.greenAccent : Colors.white54,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ...List.generate(totalSubtasks, (subIndex) {
-                          final sub = task.subtasks[subIndex];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4.0),
-                            child: InkWell(
-                              onTap: () async {
-                                bool newSubDone = !sub.isDone;
-                                if (newSubDone) {
-                                  _rewardXp(5, sub.title);
-                                }
-                                List<SubTask> updatedSubtasks =
-                                    List.from(task.subtasks);
-                                updatedSubtasks[subIndex] = SubTask(
-                                  title: sub.title,
-                                  isDone: newSubDone,
-                                );
-
-                                bool allDone = updatedSubtasks.isNotEmpty &&
-                                    updatedSubtasks.every((s) => s.isDone);
-                                bool mainDone = task.isDone;
-
-                                if (allDone && !task.isDone) {
-                                  mainDone = true;
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: () async {
+                                  bool newDone = !task.isDone;
                                   int xpAward = 0;
-                                  if (task.priority == "High") {
-                                    xpAward = 50;
-                                  } else if (task.priority == "Medium") {
-                                    xpAward = 30;
-                                  } else {
-                                    xpAward = 15;
+                                  bool rewardThisTime = false;
+                                  if (newDone && !task.xpAwarded) {
+                                    if (task.priority == "High") {
+                                      xpAward = 50;
+                                    } else if (task.priority == "Medium") {
+                                      xpAward = 30;
+                                    } else {
+                                      xpAward = 15;
+                                    }
+                                    _rewardXp(xpAward, task.title);
+                                    rewardThisTime = true;
                                   }
-                                  _rewardXp(xpAward,
-                                      "${task.title} (All checkpoints cleared!)");
-                                } else if (!allDone && task.isDone) {
-                                  mainDone = false;
-                                }
 
-                                await firestore
-                                    .collection("tasks")
-                                    .doc(task.id)
-                                    .update({
-                                  'isDone': mainDone,
-                                  'subtasks': updatedSubtasks
-                                      .map((s) => s.toMap())
-                                      .toList(),
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8.0, vertical: 4.0),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      sub.isDone
-                                          ? Icons.check_box_rounded
-                                          : Icons.check_box_outline_blank_rounded,
-                                      color: sub.isDone
-                                          ? Colors.greenAccent
-                                          : Colors.white38,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        sub.title,
-                                        style: TextStyle(
-                                          color: sub.isDone
-                                              ? Colors.white38
-                                              : Colors.white70,
-                                          fontSize: 13,
-                                          decoration: sub.isDone
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  List<SubTask> updatedSubtasks = List.from(task.subtasks);
+                                  for (var sub in updatedSubtasks) {
+                                    sub.isDone = newDone;
+                                    if (newDone) {
+                                      sub.xpAwarded = true;
+                                    }
+                                  }
+
+                                  await firestore.collection("tasks").doc(task.id).update({
+                                    'isDone': newDone,
+                                    'xpAwarded': task.xpAwarded || rewardThisTime,
+                                    'subtasks':
+                                        updatedSubtasks.map((s) => s.toMap()).toList(),
+                                  });
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: task.isDone ? Colors.greenAccent : Colors.transparent,
+                                    border: Border.all(
+                                        color: task.isDone
+                                            ? Colors.greenAccent
+                                            : Colors.white30,
+                                        width: 2),
+                                    boxShadow: task.isDone
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.greenAccent.withOpacity(0.4),
+                                              blurRadius: 8,
+                                              spreadRadius: 1,
+                                            )
+                                          ]
+                                        : [],
+                                  ),
+                                  child: task.isDone
+                                      ? const Icon(Icons.check, size: 16, color: Colors.black)
+                                      : null,
                                 ),
                               ),
-                            ),
-                          );
-                        }),
-                      ] else ...[
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: const Text(
-                                "No subtask strategy generated.",
-                                style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 12,
-                                    fontStyle: FontStyle.italic),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              onPressed: () async {
-                                showDialog(
-                                  context: context,
-                                  barrierDismissible: false,
-                                  builder: (context) => PopScope(
-                                    canPop: false,
-                                    child: Dialog(
-                                      backgroundColor: Colors.transparent,
-                                      insetPadding: const EdgeInsets.symmetric(horizontal: 40),
-                                      child: glassContainer(
-                                        blur: 20,
-                                        opacity: 0.15,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(32),
-                                          child: Column(
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      task.title,
+                                      style: TextStyle(
+                                        color: task.isDone ? Colors.white38 : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        decoration: task.isDone ? TextDecoration.lineThrough : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: isOverdue
+                                                ? Colors.redAccent.withOpacity(0.15)
+                                                : Colors.white.withOpacity(0.05),
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isOverdue
+                                                  ? Colors.redAccent.withOpacity(0.3)
+                                                  : Colors.white12,
+                                            ),
+                                          ),
+                                          child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              const CircularProgressIndicator(
-                                                valueColor:
-                                                    AlwaysStoppedAnimation<Color>(
-                                                        Color(0xff6366f1)),
+                                              Icon(
+                                                isOverdue ? Icons.error_outline : Icons.calendar_month,
+                                                size: 11,
+                                                color: isOverdue ? Colors.redAccent : Colors.white54,
                                               ),
-                                              const SizedBox(height: 24),
-                                              const Text(
-                                                "AI Strategy Decomposer",
-                                                style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 18,
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                              const SizedBox(height: 8),
+                                              const SizedBox(width: 4),
                                               Text(
-                                                "Generating checklist...",
+                                                task.dueDateTime != null
+                                                    ? DateFormat('MMM d • hh:mm a').format(task.dueDateTime!)
+                                                    : "No Deadline",
                                                 style: TextStyle(
-                                                    color: Colors.white
-                                                        .withOpacity(0.6),
-                                                    fontSize: 14),
+                                                    color: isOverdue ? Colors.redAccent : Colors.white54,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500),
                                               ),
                                             ],
                                           ),
                                         ),
-                                      ),
+                                        _buildXpValueBadge(task.priority),
+                                        _buildPriorityBadge(task.priority),
+                                      ],
                                     ),
-                                  ),
-                                );
-
-                                final aiService = AIService();
-                                try {
-                                  final steps = await aiService.generateSubtasks(
-                                      task.title, task.description);
-                                  final newSubtasks = steps
-                                      .map((s) => SubTask(title: s, isDone: false))
-                                      .toList();
-                                  await firestore
-                                      .collection("tasks")
-                                      .doc(task.id)
-                                      .update({
-                                    'subtasks': newSubtasks
-                                        .map((s) => s.toMap())
-                                        .toList(),
-                                  });
-                                } catch (e) {
-                                  //
-                                }
-                                if (context.mounted) {
-                                  Navigator.pop(context);
-                                }
-                              },
-                              icon: const Icon(Icons.auto_awesome,
-                                  size: 14, color: Color(0xff6366f1)),
-                              label: const Text(
-                                "Decompose with AI",
-                                style: TextStyle(
-                                    color: Color(0xff6366f1),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TaskDetailPage(task: task),
+                              const SizedBox(width: 8),
+                              Icon(
+                                isExpanded
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: Colors.white54,
+                                size: 20,
                               ),
-                            );
-                          },
-                          icon: const Icon(Icons.edit_note,
-                              size: 18, color: Colors.white70),
-                          label: const Text(
-                            "Edit Details",
-                            style:
-                                TextStyle(color: Colors.white70, fontSize: 12),
+                            ],
                           ),
                         ),
                       ),
+                      if (!isExpanded && totalSubtasks > 0)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white.withOpacity(0.05),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      progress == 1.0 ? Colors.greenAccent : primaryColor,
+                                    ),
+                                    minHeight: 5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "$completedSubtasks/$totalSubtasks Steps",
+                                style: TextStyle(
+                                  color: progress == 1.0 ? Colors.greenAccent : Colors.white38,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (isExpanded) ...[
+                        const Divider(color: Colors.white12, height: 1),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (task.description.isNotEmpty) ...[
+                                Text(
+                                  task.description,
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 13,
+                                      height: 1.4),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              if (totalSubtasks > 0) ...[
+                                Row(
+                                  children: [
+                                    const Icon(Icons.auto_awesome,
+                                        color: Color(0xff6366f1), size: 14),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      "AI STUDY STRATEGY",
+                                      style: TextStyle(
+                                        color: Color(0xff6366f1),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(4),
+                                          child: LinearProgressIndicator(
+                                            value: progress,
+                                            backgroundColor: Colors.white.withOpacity(0.05),
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              progress == 1.0 ? Colors.greenAccent : primaryColor,
+                                            ),
+                                            minHeight: 5,
+                                          )),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      "${(progress * 100).toInt()}% Done",
+                                      style: TextStyle(
+                                        color: progress == 1.0 ? Colors.greenAccent : Colors.white54,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ...List.generate(totalSubtasks, (subIndex) {
+                                  final sub = task.subtasks[subIndex];
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                    child: InkWell(
+                                      onTap: () async {
+                                        bool newSubDone = !sub.isDone;
+                                        bool subXpAwardedThisTime = false;
+                                        if (newSubDone && !sub.xpAwarded) {
+                                          _rewardXp(5, sub.title);
+                                          subXpAwardedThisTime = true;
+                                        }
+                                        List<SubTask> updatedSubtasks =
+                                            List.from(task.subtasks);
+                                        updatedSubtasks[subIndex] = SubTask(
+                                          title: sub.title,
+                                          isDone: newSubDone,
+                                          xpAwarded: sub.xpAwarded || subXpAwardedThisTime,
+                                        );
+
+                                        bool allDone = updatedSubtasks.isNotEmpty &&
+                                            updatedSubtasks.every((s) => s.isDone);
+                                        bool mainDone = task.isDone;
+                                        bool mainXpAwarded = task.xpAwarded;
+
+                                        if (allDone && !task.isDone) {
+                                          mainDone = true;
+                                          if (!task.xpAwarded) {
+                                            int xpAward = 0;
+                                            if (task.priority == "High") {
+                                              xpAward = 50;
+                                            } else if (task.priority == "Medium") {
+                                              xpAward = 30;
+                                            } else {
+                                              xpAward = 15;
+                                            }
+                                            _rewardXp(xpAward,
+                                                "${task.title} (All checkpoints cleared!)");
+                                            mainXpAwarded = true;
+                                          }
+                                        } else if (!allDone && task.isDone) {
+                                          mainDone = false;
+                                        }
+
+                                        await firestore
+                                            .collection("tasks")
+                                            .doc(task.id)
+                                            .update({
+                                          'isDone': mainDone,
+                                          'xpAwarded': mainXpAwarded,
+                                          'subtasks': updatedSubtasks
+                                              .map((s) => s.toMap())
+                                              .toList(),
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0, vertical: 4.0),
+                                        child: Row(
+                                          children: [
+                                            AnimatedContainer(
+                                              duration: const Duration(milliseconds: 150),
+                                              width: 20,
+                                              height: 20,
+                                              decoration: BoxDecoration(
+                                                borderRadius: BorderRadius.circular(6),
+                                                color: sub.isDone
+                                                    ? Colors.greenAccent
+                                                    : Colors.transparent,
+                                                border: Border.all(
+                                                  color: sub.isDone
+                                                      ? Colors.greenAccent
+                                                      : Colors.white30,
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: sub.isDone
+                                                  ? const Icon(Icons.check, size: 12, color: Colors.black)
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                sub.title,
+                                                style: TextStyle(
+                                                  color: sub.isDone
+                                                      ? Colors.white38
+                                                      : Colors.white70,
+                                                  fontSize: 13,
+                                                  decoration: sub.isDone
+                                                      ? TextDecoration.lineThrough
+                                                      : null,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ] else ...[
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: const Text(
+                                        "No subtask strategy generated.",
+                                        style: TextStyle(
+                                            color: Colors.white38,
+                                            fontSize: 12,
+                                            fontStyle: FontStyle.italic),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    TextButton.icon(
+                                      onPressed: () async {
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) => PopScope(
+                                            canPop: false,
+                                            child: Dialog(
+                                              backgroundColor: Colors.transparent,
+                                              insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+                                              child: glassContainer(
+                                                blur: 20,
+                                                opacity: 0.15,
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(32),
+                                                  child: Column(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const CircularProgressIndicator(
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<Color>(
+                                                                Color(0xff6366f1)),
+                                                      ),
+                                                      const SizedBox(height: 24),
+                                                      const Text(
+                                                        "AI Strategy Decomposer",
+                                                        style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 18,
+                                                            fontWeight:
+                                                                FontWeight.bold),
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        "Generating checklist...",
+                                                        style: TextStyle(
+                                                            color: Colors.white
+                                                                .withOpacity(0.6),
+                                                            fontSize: 14),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+
+                                        final aiService = AIService();
+                                        try {
+                                          final steps = await aiService.generateSubtasks(
+                                              task.title, task.description);
+                                          final newSubtasks = steps
+                                              .map((s) => SubTask(title: s, isDone: false))
+                                              .toList();
+                                          await firestore
+                                              .collection("tasks")
+                                              .doc(task.id)
+                                              .update({
+                                            'subtasks': newSubtasks
+                                                .map((s) => s.toMap())
+                                                .toList(),
+                                          });
+                                        } catch (e) {
+                                          //
+                                        }
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                        }
+                                      },
+                                      icon: const Icon(Icons.auto_awesome,
+                                          size: 14, color: Color(0xff6366f1)),
+                                      label: const Text(
+                                        "Decompose with AI",
+                                        style: TextStyle(
+                                            color: Color(0xff6366f1),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => TaskDetailPage(task: task),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.edit_note,
+                                      size: 18, color: Colors.white70),
+                                  label: const Text(
+                                    "Edit Details",
+                                    style:
+                                        TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
-            ],
+            ),
           ),
         ),
       ),

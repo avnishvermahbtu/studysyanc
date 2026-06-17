@@ -55,6 +55,15 @@ class FocusController extends ChangeNotifier {
     "Sun": 0,
   };
 
+  // Focus Category minutes counter
+  Map<String, int> _categoryMinutes = {
+    "study": 0,
+    "coding": 0,
+    "writing": 0,
+    "science": 0,
+    "meditation": 0,
+  };
+
   // Soundscape (ambient)
   bool _isSoundscapeActive = false;
   String _activeSoundscape = "Lofi Beats"; // "Lofi Beats", "Rain & Storm", "Campfire"
@@ -77,6 +86,7 @@ class FocusController extends ChangeNotifier {
   int get dailyStudyGoal => _dailyStudyGoal;
   Map<String, int> get weeklyData => _weeklyData;
   Map<String, int> get weeklyMinutes => _weeklyMinutes;
+  Map<String, int> get categoryMinutes => _categoryMinutes;
   bool get isSoundscapeActive => _isSoundscapeActive;
   String get activeSoundscape => _activeSoundscape;
 
@@ -125,6 +135,15 @@ class FocusController extends ChangeNotifier {
       "Fri": prefs.getInt("Fri_minutes") ?? ((prefs.getInt("Fri") ?? 0) * 25),
       "Sat": prefs.getInt("Sat_minutes") ?? ((prefs.getInt("Sat") ?? 0) * 25),
       "Sun": prefs.getInt("Sun_minutes") ?? ((prefs.getInt("Sun") ?? 0) * 25),
+    };
+
+    // Load category study minutes
+    _categoryMinutes = {
+      "study": prefs.getInt("cat_study") ?? 0,
+      "coding": prefs.getInt("cat_coding") ?? 0,
+      "writing": prefs.getInt("cat_writing") ?? 0,
+      "science": prefs.getInt("cat_science") ?? 0,
+      "meditation": prefs.getInt("cat_meditation") ?? 0,
     };
 
     notifyListeners();
@@ -231,6 +250,12 @@ class FocusController extends ChangeNotifier {
     await updateStreak();
     final focusMinutes = _maxSeconds ~/ 60;
     await updateWeekly(focusMinutes);
+
+    // Update and save category minutes
+    final catKey = _currentCategory.toString().split('.').last;
+    _categoryMinutes[catKey] = (_categoryMinutes[catKey] ?? 0) + focusMinutes;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt("cat_$catKey", _categoryMinutes[catKey]!);
 
     // Call onSessionCompleted callback
     onSessionCompleted?.call();

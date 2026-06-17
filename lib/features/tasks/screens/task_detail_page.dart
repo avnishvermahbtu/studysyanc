@@ -43,17 +43,22 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
   Future<void> saveChanges() async {
     bool allDone = subtasks.isNotEmpty && subtasks.every((s) => s.isDone);
     bool mainDone = widget.task.isDone;
+    bool mainXpAwarded = widget.task.xpAwarded;
+
     if (allDone && !widget.task.isDone) {
       mainDone = true;
-      int xpAward;
-      if (priority == "High") {
-        xpAward = 50;
-      } else if (priority == "Medium") {
-        xpAward = 30;
-      } else {
-        xpAward = 15;
+      if (!widget.task.xpAwarded) {
+        int xpAward;
+        if (priority == "High") {
+          xpAward = 50;
+        } else if (priority == "Medium") {
+          xpAward = 30;
+        } else {
+          xpAward = 15;
+        }
+        FocusController().addXp(xpAward);
+        mainXpAwarded = true;
       }
-      FocusController().addXp(xpAward);
     } else if (!allDone && widget.task.isDone) {
       mainDone = false;
     }
@@ -67,6 +72,7 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
       'priority': priority,
       'dueDateTime': Timestamp.fromDate(dueDate),
       'isDone': mainDone,
+      'xpAwarded': mainXpAwarded,
       'subtasks': subtasks.map((s) => s.toMap()).toList(),
     });
     if (mounted) Navigator.pop(context);
@@ -295,7 +301,8 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
                         onChanged: (val) {
                           setState(() {
                             subtasks[idx].isDone = val ?? false;
-                            if (val == true) {
+                            if (val == true && !subtasks[idx].xpAwarded) {
+                              subtasks[idx].xpAwarded = true;
                               FocusController().addXp(5);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

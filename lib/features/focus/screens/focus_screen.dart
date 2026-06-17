@@ -138,21 +138,15 @@ class _FocusScreenState extends State<FocusScreen> {
     super.dispose();
   }
 
-  // Refined Glassmorphic Container
+  // Refined Glassmorphic Container (Optimized for performance)
   Widget _buildGlassCard({required Widget child, double blur = 15, double opacity = 0.06, Color borderColor = Colors.white10}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(opacity),
-            border: Border.all(color: borderColor, width: 1.2),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: child,
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(opacity + 0.015),
+        border: Border.all(color: borderColor, width: 1.2),
+        borderRadius: BorderRadius.circular(24),
       ),
+      child: child,
     );
   }
 

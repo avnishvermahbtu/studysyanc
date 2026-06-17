@@ -3,16 +3,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SubTask {
   String title;
   bool isDone;
+  bool xpAwarded;
 
   SubTask({
     required this.title,
     this.isDone = false,
+    this.xpAwarded = false,
   });
 
   factory SubTask.fromMap(Map<String, dynamic> data) {
     return SubTask(
       title: data['title'] ?? '',
       isDone: data['isDone'] ?? false,
+      xpAwarded: data['xpAwarded'] ?? false,
     );
   }
 
@@ -20,6 +23,7 @@ class SubTask {
     return {
       'title': title,
       'isDone': isDone,
+      'xpAwarded': xpAwarded,
     };
   }
 }
@@ -30,6 +34,7 @@ class Task {
   String description;
   String priority;
   bool isDone;
+  bool xpAwarded;
   DateTime? dueDateTime;
   List<SubTask> subtasks;
 
@@ -40,6 +45,7 @@ class Task {
     required this.priority,
     this.dueDateTime,
     this.isDone = false,
+    this.xpAwarded = false,
     this.subtasks = const [],
   });
 
@@ -59,6 +65,7 @@ class Task {
           ? (data['dueDateTime'] as Timestamp).toDate()
           : null,
       isDone: data['isDone'] ?? false,
+      xpAwarded: data['xpAwarded'] ?? false,
       subtasks: parsedSubtasks,
     );
   }
@@ -71,6 +78,7 @@ class Task {
       "priority": priority,
       "dueDateTime": dueDateTime,
       "isDone": isDone,
+      "xpAwarded": xpAwarded,
       "subtasks": subtasks.map((x) => x.toMap()).toList(),
     };
   }
