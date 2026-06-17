@@ -289,33 +289,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Welcome Back, $_studentName 👋",
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 4),
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [Color(0xff6366f1), Colors.pinkAccent],
-              ).createShader(bounds),
-              child: const Text(
-                "Ready to Conquer? ⚡",
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Welcome Back, $_studentName 👋",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 14,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              ShaderMask(
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xff6366f1), Colors.pinkAccent],
+                ).createShader(bounds),
+                child: const Text(
+                  "Ready to Conquer? ⚡",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+        const SizedBox(width: 16),
         Row(
           children: [
             GestureDetector(
@@ -970,25 +977,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           border: Border.all(color: Colors.white10),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Row(
-                              children: [
-                                Icon(Icons.timer_outlined, color: Colors.white70),
-                                SizedBox(width: 12),
-                                Text("Edit Daily Study Goal", style: TextStyle(color: Colors.white, fontSize: 14)),
-                              ],
+                            const Icon(Icons.timer_outlined, color: Colors.white70),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                "Edit Daily Study Goal",
+                                style: TextStyle(color: Colors.white, fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            Row(
-                              children: [
-                                Text(
-                                  "${_focusController.dailyStudyGoal} mins",
-                                  style: const TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(Icons.chevron_right_rounded, color: Colors.white30),
-                              ],
+                            const SizedBox(width: 8),
+                            Text(
+                              "${_focusController.dailyStudyGoal} mins",
+                              style: const TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold),
                             ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.white30),
                           ],
                         ),
                       ),

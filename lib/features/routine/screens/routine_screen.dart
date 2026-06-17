@@ -476,151 +476,157 @@ class _RoutineScreenState extends State<RoutineScreen> {
       builder: (context) {
         return Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: _buildGlassCard(
-            blur: 25,
-            opacity: 0.14,
-            borderColor: accent.withOpacity(0.2),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Pull notch
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xff0f172a),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
+              ),
+              border: Border.all(
+                color: accent.withOpacity(0.25),
+                width: 1.2,
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Pull notch
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 5,
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Class Name and Type
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        routine.title,
+                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Class Name and Type
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          routine.title,
-                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                        ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: accent.withOpacity(0.3)),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: accent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: accent.withOpacity(0.3)),
-                        ),
-                        child: Text(
-                          routine.type.toUpperCase(),
-                          style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 11),
-                        ),
+                      child: Text(
+                        routine.type.toUpperCase(),
+                        style: TextStyle(color: accent, fontWeight: FontWeight.bold, fontSize: 11),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 15),
 
-                  // Location & Time metadata
-                  Row(
-                    children: [
-                      Icon(Icons.access_time_rounded, color: accent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        "${routine.startTime} — ${routine.endTime}",
+                // Location & Time metadata
+                Row(
+                  children: [
+                    Icon(Icons.access_time_rounded, color: accent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "${routine.startTime} — ${routine.endTime}",
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(width: 20),
+                    Icon(Icons.location_on_rounded, color: accent, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        routine.location.isNotEmpty ? routine.location : "No Location",
                         style: const TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(width: 20),
-                      Icon(Icons.location_on_rounded, color: accent, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          routine.location.isNotEmpty ? routine.location : "No Location",
-                          style: const TextStyle(color: Colors.white70, fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 25),
-
-                  // Lecture Notes Area
-                  const Text(
-                    "Lecture Notes & Tasks",
-                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: notesFieldController,
-                    maxLines: 4,
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: "Add homework details, links, or notes from this class...",
-                      hintStyle: const TextStyle(color: Colors.white24),
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.04),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 25),
+
+                // Lecture Notes Area
+                const Text(
+                  "Lecture Notes & Tasks",
+                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: notesFieldController,
+                  maxLines: 4,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: "Add homework details, links, or notes from this class...",
+                    hintStyle: const TextStyle(color: Colors.white24),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.04),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
-                  const SizedBox(height: 25),
+                ),
+                const SizedBox(height: 25),
 
-                  // Action row
-                  Row(
-                    children: [
-                      // Delete Class
-                      GestureDetector(
-                        onTap: () {
-                          AwesomeDialog(
-                            context: context,
-                            dialogType: DialogType.warning,
-                            title: "Delete Class?",
-                            desc: "Are you sure you want to delete ${routine.title}?",
-                            btnCancelOnPress: () {},
-                            btnOkOnPress: () {
-                              isDeleted = true;
-                              Navigator.pop(context);
-                              if (routine.id != null) {
-                                firestore.collection("routine").doc(routine.id).delete();
-                              }
-                            },
-                          ).show();
-                        },
-                        child: CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Colors.red.withOpacity(0.12),
-                          child: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
-                        ),
+                // Action row
+                Row(
+                  children: [
+                    // Delete Class
+                    GestureDetector(
+                      onTap: () {
+                        AwesomeDialog(
+                          context: context,
+                          dialogType: DialogType.warning,
+                          title: "Delete Class?",
+                          desc: "Are you sure you want to delete ${routine.title}?",
+                          btnCancelOnPress: () {},
+                          btnOkOnPress: () {
+                            isDeleted = true;
+                            Navigator.pop(context);
+                            if (routine.id != null) {
+                              firestore.collection("routine").doc(routine.id).delete();
+                            }
+                          },
+                        ).show();
+                      },
+                      child: CircleAvatar(
+                        radius: 26,
+                        backgroundColor: Colors.red.withOpacity(0.12),
+                        child: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
                       ),
-                      const SizedBox(width: 14),
+                    ),
+                    const SizedBox(width: 14),
 
-                      // Save changes
-                      Expanded(
-                        child: SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accent,
-                              foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            onPressed: () {
-                              Navigator.pop(context);
-                            },
-                            child: const Text(
-                              "SAVE NOTES",
-                              style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                            ),
+                    // Save changes
+                    Expanded(
+                      child: SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            "SAVE NOTES",
+                            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
                           ),
                         ),
-                      )
-                    ],
-                  ),
-                ],
-              ),
+                      ),
+                    )
+                  ],
+                ),
+              ],
             ),
           ),
         );
@@ -659,182 +665,188 @@ class _RoutineScreenState extends State<RoutineScreen> {
 
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: _buildGlassCard(
-                blur: 25,
-                opacity: 0.15,
-                borderColor: accent.withOpacity(0.2),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 5,
-                          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        "Add Class Block",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          shadows: [Shadow(color: accent.withOpacity(0.3), blurRadius: 8)],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Title
-                      TextField(
-                        controller: titleController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: "Subject Name",
-                          labelStyle: const TextStyle(color: Colors.white38),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.04),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                          prefixIcon: Icon(Icons.book_rounded, color: accent),
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-
-                      // Location
-                      TextField(
-                        controller: locationController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: "Room / Location",
-                          labelStyle: const TextStyle(color: Colors.white38),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.04),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                          prefixIcon: Icon(Icons.location_on_rounded, color: accent),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Type selector Wrap
-                      const Text("Type", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: routineTypes.map((type) {
-                          bool isSel = selectedType == type;
-                          Color color = typeColors[type] ?? Colors.blueAccent;
-                          return GestureDetector(
-                            onTap: () => setSheetState(() => selectedType = type),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSel ? color.withOpacity(0.18) : Colors.white.withOpacity(0.03),
-                                border: Border.all(color: isSel ? color : Colors.white12, width: 1.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                type,
-                                style: TextStyle(
-                                  color: isSel ? Colors.white : Colors.white38,
-                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Times
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTimePickerBox(
-                              "Start Time",
-                              startTime,
-                              () async {
-                                TimeOfDay? picked = await showTimePicker(
-                                  context: context,
-                                  initialTime: startTime ?? TimeOfDay.now(),
-                                );
-                                if (picked != null) {
-                                  setSheetState(() => startTime = picked);
-                                }
-                              },
-                              accent,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: _buildTimePickerBox(
-                              "End Time",
-                              endTime,
-                              () async {
-                                TimeOfDay? picked = await showTimePicker(
-                                  context: context,
-                                  initialTime: endTime ?? TimeOfDay.now(),
-                                );
-                                if (picked != null) {
-                                  setSheetState(() => endTime = picked);
-                                }
-                              },
-                              accent,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Save Button
-                      SizedBox(
-                        height: 52,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: 8,
-                            shadowColor: accent.withOpacity(0.4),
-                          ),
-                          onPressed: () {
-                            if (titleController.text.trim().isEmpty || locationController.text.trim().isEmpty) {
-                              AwesomeDialog(
-                                context: context,
-                                dialogType: DialogType.warning,
-                                title: "Missing Info",
-                                desc: "Please fill in Subject and Room details.",
-                                btnOkOnPress: () {},
-                              ).show();
-                              return;
-                            }
-                            if (startTime == null || endTime == null) {
-                              AwesomeDialog(
-                                context: context,
-                                dialogType: DialogType.warning,
-                                title: "Select Time",
-                                desc: "Please choose Start and End time.",
-                                btnOkOnPress: () {},
-                              ).show();
-                              return;
-                            }
-
-                            _saveRoutine();
-                            Navigator.pop(context);
-                          },
-                          child: const Text(
-                            "ADD TO TIMETABLE",
-                            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                          ),
-                        ),
-                      )
-                    ],
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xff0f172a),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
                   ),
+                  border: Border.all(
+                    color: accent.withOpacity(0.25),
+                    width: 1.2,
+                  ),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      "Add Class Block",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: accent.withOpacity(0.3), blurRadius: 8)],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Title
+                    TextField(
+                      controller: titleController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: "Subject Name",
+                        labelStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.04),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        prefixIcon: Icon(Icons.book_rounded, color: accent),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    // Location
+                    TextField(
+                      controller: locationController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: "Room / Location",
+                        labelStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.04),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                        prefixIcon: Icon(Icons.location_on_rounded, color: accent),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Type selector Wrap
+                    const Text("Type", style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: routineTypes.map((type) {
+                        bool isSel = selectedType == type;
+                        Color color = typeColors[type] ?? Colors.blueAccent;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedType = type),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSel ? color.withOpacity(0.18) : Colors.white.withOpacity(0.03),
+                              border: Border.all(color: isSel ? color : Colors.white12, width: 1.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              type,
+                              style: TextStyle(
+                                color: isSel ? Colors.white : Colors.white38,
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Times
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTimePickerBox(
+                            "Start Time",
+                            startTime,
+                            () async {
+                              TimeOfDay? picked = await showTimePicker(
+                                context: context,
+                                initialTime: startTime ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setSheetState(() => startTime = picked);
+                              }
+                            },
+                            accent,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: _buildTimePickerBox(
+                            "End Time",
+                            endTime,
+                            () async {
+                              TimeOfDay? picked = await showTimePicker(
+                                context: context,
+                                initialTime: endTime ?? TimeOfDay.now(),
+                              );
+                              if (picked != null) {
+                                setSheetState(() => endTime = picked);
+                              }
+                            },
+                            accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Save Button
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 8,
+                          shadowColor: accent.withOpacity(0.4),
+                        ),
+                        onPressed: () {
+                          if (titleController.text.trim().isEmpty || locationController.text.trim().isEmpty) {
+                            AwesomeDialog(
+                              context: context,
+                              dialogType: DialogType.warning,
+                              title: "Missing Info",
+                              desc: "Please fill in Subject and Room details.",
+                              btnOkOnPress: () {},
+                            ).show();
+                            return;
+                          }
+                          if (startTime == null || endTime == null) {
+                            AwesomeDialog(
+                              context: context,
+                              dialogType: DialogType.warning,
+                              title: "Select Time",
+                              desc: "Please choose Start and End time.",
+                              btnOkOnPress: () {},
+                            ).show();
+                            return;
+                          }
+
+                          _saveRoutine();
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          "ADD TO TIMETABLE",
+                          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                        ),
+                      ),
+                    )
+                  ],
                 ),
               ),
             );

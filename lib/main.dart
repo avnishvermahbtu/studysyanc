@@ -7,11 +7,14 @@ import 'package:studysync/features/navigation/main_navigation_screen.dart';
 import 'package:studysync/features/routine/screens/routine_model.dart';
 import 'package:studysync/features/routine/screens/routine_screen.dart';
 import 'package:studysync/login_page.dart';
+import 'package:studysync/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Explicitly enable offline support & local caching for Firestore
   FirebaseFirestore.instance.settings = const Settings(

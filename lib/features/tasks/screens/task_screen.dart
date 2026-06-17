@@ -281,111 +281,118 @@ class _TaskScreenState extends State<TaskScreen> {
         builder: (context, setSheetState) => Padding(
           padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: glassContainer(
-            blur: 25,
-            opacity: 0.1,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text("Create New Task",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
-                  _buildTextField(
-                      titleController, "Task Title", Icons.title),
-                  const SizedBox(height: 15),
-                  _buildTextField(
-                      descController, "Description", Icons.description,
-                      maxLines: 3),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: ["Low", "Medium", "High"]
-                        .map((p) {
-                          final isSelected = selectedPriority == p;
-                          return GestureDetector(
-                            onTap: () => setSheetState(() => selectedPriority = p),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected ? primaryColor : accentColor,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isSelected ? primaryColor : Colors.white10,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                p,
-                                style: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.white54,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  fontSize: 14,
-                                ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xff0f172a),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.08),
+                width: 1.2,
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Create New Task",
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                _buildTextField(
+                    titleController, "Task Title", Icons.title),
+                const SizedBox(height: 15),
+                _buildTextField(
+                    descController, "Description", Icons.description,
+                    maxLines: 3),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: ["Low", "Medium", "High"]
+                      .map((p) {
+                        final isSelected = selectedPriority == p;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedPriority = p),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryColor : accentColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? primaryColor : Colors.white10,
+                                width: 1,
                               ),
                             ),
-                          );
-                        })
-                        .toList(),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.auto_awesome, color: Color(0xff6366f1), size: 20),
-                          const SizedBox(width: 8),
-                          const Text(
-                            "AI Subtask Strategy",
-                            style: TextStyle(
-                                color: Colors.white,
+                            child: Text(
+                              p,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.white54,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 14,
-                                fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                      Switch(
-                        value: aiDecompose,
-                        onChanged: (val) {
-                          setSheetState(() {
-                            aiDecompose = val;
-                          });
-                        },
-                        activeColor: primaryColor,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await pickDateTime();
-                      setSheetState(() {});
-                    },
-                    icon: const Icon(Icons.calendar_month),
-                    label: Text(dueDateTime == null
-                        ? "Select Deadline"
-                        : DateFormat('MMM d, yyyy • hh:mm a').format(dueDateTime!)),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          padding: const EdgeInsets.all(16)),
-                      onPressed: () => addTask(aiDecompose: aiDecompose),
-                      child: const Text("Save Task",
-                          style: TextStyle(fontSize: 18, color: Colors.white)),
+                        );
+                      })
+                      .toList(),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, color: Color(0xff6366f1), size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "AI Subtask Strategy",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                  )
-                ],
-              ),
+                    Switch(
+                      value: aiDecompose,
+                      onChanged: (val) {
+                        setSheetState(() {
+                          aiDecompose = val;
+                        });
+                      },
+                      activeColor: primaryColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await pickDateTime();
+                    setSheetState(() {});
+                  },
+                  icon: const Icon(Icons.calendar_month),
+                  label: Text(dueDateTime == null
+                      ? "Select Deadline"
+                      : DateFormat('MMM d, yyyy • hh:mm a').format(dueDateTime!)),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.all(16)),
+                    onPressed: () => addTask(aiDecompose: aiDecompose),
+                    child: const Text("Save Task",
+                        style: TextStyle(fontSize: 18, color: Colors.white)),
+                  ),
+                )
+              ],
             ),
           ),
         ),
