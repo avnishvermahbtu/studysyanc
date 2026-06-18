@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../../core/config/secrets.dart';
+import '../../../core/services/network_service.dart';
 
 class AIService {
   static const apiKey = geminiApiKey;
@@ -13,6 +15,11 @@ class AIService {
     String title,
     String description,
   ) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
     final prompt = """
 You are a NEET study planner.
 Task:
@@ -34,6 +41,11 @@ Low
     String title,
     String description,
   ) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
     final prompt = """
 You are an expert academic advisor and study strategist for NEET/JEE students.
 Task Title: $title
@@ -66,6 +78,11 @@ Example response format:
   }
 
   Future<String> generateRoadmap(String topic, String timeline) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
     final prompt = """
 You are an expert academic mentor and study strategist for NEET/JEE.
 Goal: Create a highly structured, milestone-based study roadmap/plan for:
@@ -102,8 +119,13 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
   }
 
   Future<String> generateQuiz(String notesOrTopic, int questionCount, String difficulty) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
     final prompt = """
-You are an academic examiner for NEET/JEE.
+You are academic examiner for NEET/JEE.
 Goal: Generate exactly $questionCount multiple-choice questions (MCQs) of $difficulty difficulty based on the following notes, syllabus, or topic:
 ---
 $notesOrTopic
@@ -141,6 +163,11 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
     required String focusRank,
     required List<String> todayTasks,
   }) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
     final tasksText = todayTasks.isEmpty ? "None scheduled" : todayTasks.join(", ");
     final prompt = """
 You are "Sync", an elite AI study coach and academic mentor for JEE/NEET students. Your tone is highly motivational, energetic, clear, and direct.

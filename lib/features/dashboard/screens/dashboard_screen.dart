@@ -8,9 +8,9 @@ import 'package:studysync/login_page.dart';
 import '../../tasks/models/task_model.dart';
 import '../../focus/controller/focus_controller.dart';
 import '../widgets/dashboard_card.dart';
-import '../../ai coach/roadmap_screen.dart';
-import '../../ai coach/backlog_screen.dart';
-import '../../ai coach/notes_to_quiz_screen.dart';
+import '../../ai_coach/roadmap_screen.dart';
+import '../../ai_coach/backlog_screen.dart';
+import '../../ai_coach/notes_to_quiz_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import '../../routine/screens/study_zones_screen.dart';
 

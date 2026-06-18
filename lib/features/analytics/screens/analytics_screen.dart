@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:studysync/features/focus/controller/focus_controller.dart';
-import 'package:studysync/features/dasboard/widgets/dashboard_card.dart';
+import 'package:studysync/features/dashboard/widgets/dashboard_card.dart';
 import 'package:studysync/features/tasks/models/task_model.dart';
 import 'package:studysync/features/routine/screens/routine_model.dart';
 

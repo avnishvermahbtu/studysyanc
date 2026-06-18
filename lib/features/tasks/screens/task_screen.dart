@@ -9,6 +9,7 @@ import '../models/task_model.dart';
 import 'ai_service.dart';
 import 'task_detail_page.dart';
 import '../../focus/controller/focus_controller.dart';
+import '../../../core/services/network_service.dart';
 
 class TaskScreen extends StatefulWidget {
   const TaskScreen({super.key});
@@ -181,6 +182,39 @@ class _TaskScreenState extends State<TaskScreen> {
         btnOkOnPress: () {},
       ).show();
       return;
+    }
+
+    if (aiDecompose) {
+      final hasInternet = await NetworkService().hasInternet();
+      if (!hasInternet) {
+        if (mounted) {
+          AwesomeDialog(
+            context: context,
+            dialogType: DialogType.warning,
+            title: 'AI Offline 🔌',
+            desc: 'AI strategy breakdown requires an internet connection. Save this task manually instead?',
+            btnCancelText: 'Cancel',
+            btnOkText: 'Save Regular',
+            btnOkColor: const Color(0xff6366f1),
+            btnCancelOnPress: () {},
+            btnOkOnPress: () async {
+              // Close bottom sheet
+              Navigator.pop(context);
+              
+              Task task = Task(
+                title: titleController.text.trim(),
+                description: descController.text.trim(),
+                priority: selectedPriority,
+                dueDateTime: dueDateTime!,
+                isDone: false,
+                subtasks: [],
+              );
+              await firestore.collection("tasks").add(task.toMap());
+            },
+          ).show();
+        }
+        return;
+      }
     }
 
     // Close bottom sheet

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:studysync/core/services/geofence_service.dart';
-import 'package:studysync/features/dasboard/widgets/dashboard_card.dart';
+import 'package:studysync/features/dashboard/widgets/dashboard_card.dart';
 
 class StudyZonesScreen extends StatefulWidget {
   const StudyZonesScreen({super.key});

@@ -5,8 +5,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
 import '../tasks/screens/ai_service.dart';
 import 'roadmap_model.dart';
+import '../dashboard/widgets/offline_banner.dart';
+import '../../core/services/network_service.dart';
 
 class RoadmapScreen extends StatefulWidget {
   const RoadmapScreen({super.key});
@@ -27,6 +30,9 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
   Roadmap? _activeRoadmap;
   Set<String> _completedTasks = {};
+
+  bool _isOffline = false;
+  bool _isCheckingConnection = false;
 
   final List<String> _loadingSteps = [
     "Analyzing study scope... 🔍",
@@ -81,21 +87,71 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     await prefs.setStringList("completed_roadmap_tasks", _completedTasks.toList());
   }
 
+  Future<void> _checkInternetConnection() async {
+    if (_isCheckingConnection) return;
+    setState(() {
+      _isCheckingConnection = true;
+    });
+    final hasInternet = await NetworkService().hasInternet();
+    setState(() {
+      _isOffline = !hasInternet;
+      _isCheckingConnection = false;
+    });
+    if (hasInternet) {
+      if (_topicController.text.trim().isNotEmpty && _timelineController.text.trim().isNotEmpty) {
+        _generateRoadmap();
+      } else {
+        AwesomeDialog(
+          context: context,
+          dialogType: DialogType.warning,
+          title: 'Missing Info',
+          desc: 'Please fill in both topic and timeline fields.',
+          btnOkOnPress: () {},
+          btnOkColor: const Color(0xff6366f1),
+        ).show();
+      }
+    } else {
+      HapticFeedback.vibrate();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Still offline. Check your internet connection."),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   // Generate roadmap through Gemini model
   Future<void> _generateRoadmap() async {
     final topic = _topicController.text.trim();
     final timeline = _timelineController.text.trim();
 
     if (topic.isEmpty || timeline.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in both topic and timeline fields.")),
-      );
+      AwesomeDialog(
+        context: context,
+        dialogType: DialogType.warning,
+        title: 'Missing Info',
+        desc: 'Please fill in both topic and timeline fields.',
+        btnOkOnPress: () {},
+        btnOkColor: const Color(0xff6366f1),
+      ).show();
+      return;
+    }
+
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      setState(() {
+        _isOffline = true;
+      });
       return;
     }
 
     FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
+      _isOffline = false;
       _loadingIndex = 0;
       _loadingMessage = _loadingSteps[0];
     });
@@ -291,6 +347,13 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_isOffline) ...[
+            OfflineBanner(
+              onRetry: _checkInternetConnection,
+              isRetrying: _isCheckingConnection,
+            ),
+            const SizedBox(height: 16),
+          ],
           const SizedBox(height: 20),
           // Heading Section
           Icon(Icons.map_rounded, color: const Color(0xff6366f1), size: 60),

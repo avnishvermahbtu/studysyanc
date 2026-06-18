@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../ai coach/ai_coach_screen.dart';
-import '../dasboard/screens/dashboard_screen.dart';
+import '../ai_coach/ai_coach_screen.dart';
+import '../dashboard/screens/dashboard_screen.dart';
 import '../tasks/screens/task_screen.dart';
 import '../routine/screens/routine_screen.dart';
 import '../focus/screens/focus_screen.dart';

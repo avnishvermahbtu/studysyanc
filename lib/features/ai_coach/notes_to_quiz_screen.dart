@@ -5,8 +5,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
+import '../dashboard/widgets/offline_banner.dart';
+import '../../core/services/network_service.dart';
 
 class NotesToQuizScreen extends StatefulWidget {
   const NotesToQuizScreen({super.key});
@@ -22,6 +25,8 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
   late FocusController _focusController;
 
   bool _isLoading = false;
+  bool _isOffline = false;
+  bool _isCheckingConnection = false;
   String _loadingMessage = "";
   Timer? _loadingTimer;
   int _loadingIndex = 0;
@@ -59,19 +64,69 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
     super.dispose();
   }
 
+  Future<void> _checkInternetConnection() async {
+    if (_isCheckingConnection) return;
+    setState(() {
+      _isCheckingConnection = true;
+    });
+    final hasInternet = await NetworkService().hasInternet();
+    setState(() {
+      _isOffline = !hasInternet;
+      _isCheckingConnection = false;
+    });
+    if (hasInternet) {
+      if (_notesController.text.trim().isNotEmpty) {
+        _generateQuiz();
+      } else {
+        AwesomeDialog(
+          context: context,
+          dialogType: DialogType.warning,
+          title: 'Missing Notes',
+          desc: 'Please paste some study notes or enter a practice topic first.',
+          btnOkOnPress: () {},
+          btnOkColor: const Color(0xff10b981),
+        ).show();
+      }
+    } else {
+      HapticFeedback.vibrate();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Still offline. Check your internet connection."),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   // Generate quiz through Gemini model
   Future<void> _generateQuiz() async {
     final notes = _notesController.text.trim();
     if (notes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please paste some study notes or enter a practice topic first.")),
-      );
+      AwesomeDialog(
+        context: context,
+        dialogType: DialogType.warning,
+        title: 'Missing Notes',
+        desc: 'Please paste some study notes or enter a practice topic first.',
+        btnOkOnPress: () {},
+        btnOkColor: const Color(0xff10b981),
+      ).show();
+      return;
+    }
+
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      setState(() {
+        _isOffline = true;
+      });
       return;
     }
 
     FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
+      _isOffline = false;
       _loadingIndex = 0;
       _loadingMessage = _loadingSteps[0];
       _questions.clear();
@@ -317,6 +372,13 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_isOffline) ...[
+            OfflineBanner(
+              onRetry: _checkInternetConnection,
+              isRetrying: _isCheckingConnection,
+            ),
+            const SizedBox(height: 16),
+          ],
           const SizedBox(height: 10),
           Icon(Icons.quiz_rounded, color: const Color(0xff10b981), size: 55),
           const SizedBox(height: 20),

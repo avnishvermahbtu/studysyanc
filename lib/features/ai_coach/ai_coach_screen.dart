@@ -4,12 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:studysync/features/ai%20coach/backlog_screen.dart';
-import 'package:studysync/features/ai%20coach/notes_to_quiz_screen.dart';
-import 'package:studysync/features/ai%20coach/roadmap_screen.dart';
+import 'package:studysync/features/ai_coach/backlog_screen.dart';
+import 'package:studysync/features/ai_coach/notes_to_quiz_screen.dart';
+import 'package:studysync/features/ai_coach/roadmap_screen.dart';
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import 'backlog_service.dart';
+import '../dashboard/widgets/offline_banner.dart';
+import '../../core/services/network_service.dart';
 
 class AICoachScreen extends StatefulWidget {
   const AICoachScreen({super.key});
@@ -25,6 +27,9 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
   String _coachingMessage = "Analyzing your study scope... 🤖";
   bool _isCoachingLoading = false;
   late AnimationController _refreshAnimController;
+
+  bool _isOffline = false;
+  bool _isCheckingConnection = false;
 
   @override
   void initState() {
@@ -43,10 +48,53 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  Future<void> _checkInternetConnection() async {
+    if (_isCheckingConnection) return;
+    setState(() {
+      _isCheckingConnection = true;
+    });
+    final hasInternet = await NetworkService().hasInternet();
+    setState(() {
+      _isOffline = !hasInternet;
+      _isCheckingConnection = false;
+    });
+    if (hasInternet) {
+      _loadCoachingAdvice(forceRefresh: true);
+    } else {
+      HapticFeedback.vibrate();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Still offline. Check your internet connection."),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   // Load or generate dynamic advice using student context metrics
   Future<void> _loadCoachingAdvice({bool forceRefresh = false}) async {
     if (_isCoachingLoading) return;
+
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedMsg = prefs.getString("cached_coaching_msg") ?? "";
+      setState(() {
+        _isOffline = true;
+        _isCoachingLoading = false;
+        if (cachedMsg.isNotEmpty) {
+          _coachingMessage = "$cachedMsg\n\n⚠️ (Offline mode: Advice is cached)";
+        } else {
+          _coachingMessage = "StudySync Coach is offline. Please check your internet connection and try again. ⚡";
+        }
+      });
+      return;
+    }
+
     setState(() {
+      _isOffline = false;
       _isCoachingLoading = true;
       if (forceRefresh) {
         _coachingMessage = "Sync is compiling recommendations... 🤖";
@@ -185,6 +233,13 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_isOffline) ...[
+                    OfflineBanner(
+                      onRetry: _checkInternetConnection,
+                      isRetrying: _isCheckingConnection,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   // 1. Student Info Rank Badge (Top Card)
                   _buildStudentHeaderCard(minutesToday),
                   const SizedBox(height: 20),
