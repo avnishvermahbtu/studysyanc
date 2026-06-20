@@ -56,6 +56,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'backlog_fab',
         backgroundColor: const Color(0xff6366f1),
         elevation: 8,
         onPressed: showAddDialog,

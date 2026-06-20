@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../../core/config/secrets.dart';
 import '../../../core/services/network_service.dart';
@@ -149,6 +150,46 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 
     try {
       final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim() ?? "";
+      return _cleanJsonString(text);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  Future<String> generateQuizFromPdf(List<int> pdfBytes, int questionCount, String difficulty) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
+    final prompt = """
+You are academic examiner for NEET/JEE.
+Goal: Generate exactly $questionCount multiple-choice questions (MCQs) of $difficulty difficulty based on the attached PDF document.
+
+Provide the quiz as a valid JSON array of objects. Each object must follow this schema:
+{
+  "question": "Question text here?",
+  "options": [
+    "Option 1 text",
+    "Option 2 text",
+    "Option 3 text",
+    "Option 4 text"
+  ],
+  "correctIndex": 0, // Integer index (0 to 3) representing the correct option in options array
+  "explanation": "Brief academic explanation of why this answer is correct."
+}
+
+Return ONLY the raw valid JSON. Do not include markdown code block syntax (like ```json or ```), explainers, or any additional text.
+""";
+
+    try {
+      final response = await model.generateContent([
+        Content.multi([
+          DataPart('application/pdf', Uint8List.fromList(pdfBytes)),
+          TextPart(prompt),
+        ])
+      ]);
       final text = response.text?.trim() ?? "";
       return _cleanJsonString(text);
     } catch (e) {

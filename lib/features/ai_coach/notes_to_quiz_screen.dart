@@ -1,18 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
+import 'quiz_revision_service.dart';
 
 class NotesToQuizScreen extends StatefulWidget {
-  const NotesToQuizScreen({super.key});
+  final List<Map<String, dynamic>>? preloadedQuestions;
+  const NotesToQuizScreen({super.key, this.preloadedQuestions});
 
   @override
   State<NotesToQuizScreen> createState() => _NotesToQuizScreenState();
@@ -28,6 +34,99 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
   bool _isOffline = false;
   bool _isCheckingConnection = false;
   String _loadingMessage = "";
+
+  bool _isScanningText = false;
+  PlatformFile? _selectedPdfFile;
+  Uint8List? _pdfBytes;
+  Set<String> _bookmarkedQuestions = {};
+
+  Future<void> _scanNotesFromCamera() async {
+    final picker = ImagePicker();
+    // Prompt the user to select either Camera or Gallery
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xff0f172a),
+        title: const Text("Scan Source", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text("Would you like to take a photo or select from library?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ImageSource.gallery),
+            child: const Text("Gallery", style: TextStyle(color: Color(0xff10b981))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xff10b981)),
+            onPressed: () => Navigator.pop(context, ImageSource.camera),
+            child: const Text("Camera", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+    final image = await picker.pickImage(source: source);
+    if (image == null) return;
+
+    setState(() {
+      _isScanningText = true;
+    });
+
+    try {
+      final inputImage = InputImage.fromFilePath(image.path);
+      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+      final recognizedText = await textRecognizer.processImage(inputImage);
+      await textRecognizer.close();
+
+      if (!mounted) return;
+      if (recognizedText.text.trim().isNotEmpty) {
+        setState(() {
+          _notesController.text = recognizedText.text;
+          _selectedPdfFile = null; // Clear PDF selection if text is updated
+          _pdfBytes = null;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No text recognized from the image.")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to recognize text: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanningText = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickPdfFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true, // Crucial for getting the bytes
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        setState(() {
+          _selectedPdfFile = result.files.single;
+          _pdfBytes = result.files.single.bytes;
+          _notesController.clear(); // Clear text field if PDF is loaded
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to pick PDF: $e")),
+        );
+      }
+    }
+  }
   Timer? _loadingTimer;
   int _loadingIndex = 0;
 
@@ -54,6 +153,51 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     _focusController = FocusController();
+
+    if (widget.preloadedQuestions != null && widget.preloadedQuestions!.isNotEmpty) {
+      _questions = List<Map<String, dynamic>>.from(widget.preloadedQuestions!);
+      _loadBookmarkStates();
+    }
+  }
+
+  Future<void> _loadBookmarkStates() async {
+    final Set<String> bookmarkedSet = {};
+    for (var q in _questions) {
+      final isB = await QuizRevisionService().isQuestionBookmarked(q['question'] as String);
+      if (isB) {
+        bookmarkedSet.add(q['question'] as String);
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _bookmarkedQuestions = bookmarkedSet;
+      });
+    }
+  }
+
+  Future<void> _toggleBookmarkCurrentQuestion() async {
+    final q = _questions[_currentIndex];
+    final questionText = q['question'] as String;
+    final isBookmarked = _bookmarkedQuestions.contains(questionText);
+    final newBookmarkState = !isBookmarked;
+
+    setState(() {
+      if (newBookmarkState) {
+        _bookmarkedQuestions.add(questionText);
+      } else {
+        _bookmarkedQuestions.remove(questionText);
+      }
+    });
+
+    HapticFeedback.mediumImpact();
+
+    await QuizRevisionService().toggleBookmark(
+      question: questionText,
+      options: List<String>.from(q['options']),
+      correctIndex: q['correctIndex'] as int,
+      explanation: q['explanation'] as String,
+      bookmarkState: newBookmarkState,
+    );
   }
 
   @override
@@ -74,7 +218,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
       _isOffline = !hasInternet;
       _isCheckingConnection = false;
     });
-    if (hasInternet) {
+    if (mounted && hasInternet) {
       if (_notesController.text.trim().isNotEmpty) {
         _generateQuiz();
       } else {
@@ -87,28 +231,28 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
           btnOkColor: const Color(0xff10b981),
         ).show();
       }
-    } else {
+    } else if (mounted) {
       HapticFeedback.vibrate();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Still offline. Check your internet connection."),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Still offline. Check your internet connection."),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
   // Generate quiz through Gemini model
   Future<void> _generateQuiz() async {
     final notes = _notesController.text.trim();
-    if (notes.isEmpty) {
+    final isPdf = _selectedPdfFile != null && _pdfBytes != null;
+
+    if (notes.isEmpty && !isPdf) {
       AwesomeDialog(
         context: context,
         dialogType: DialogType.warning,
         title: 'Missing Notes',
-        desc: 'Please paste some study notes or enter a practice topic first.',
+        desc: 'Please paste some study notes, scan from camera, or upload a PDF topic first.',
         btnOkOnPress: () {},
         btnOkColor: const Color(0xff10b981),
       ).show();
@@ -116,6 +260,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
     }
 
     final hasInternet = await NetworkService().hasInternet();
+    if (!mounted) return;
     if (!hasInternet) {
       setState(() {
         _isOffline = true;
@@ -148,7 +293,12 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
     });
 
     try {
-      final jsonResponse = await _aiService.generateQuiz(notes, _questionCount, _difficulty);
+      final String jsonResponse;
+      if (isPdf) {
+        jsonResponse = await _aiService.generateQuizFromPdf(_pdfBytes!, _questionCount, _difficulty);
+      } else {
+        jsonResponse = await _aiService.generateQuiz(notes, _questionCount, _difficulty);
+      }
       _loadingTimer?.cancel();
 
       if (jsonResponse.isEmpty) {
@@ -171,18 +321,21 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
           _questions = parsedQuestions;
           _isLoading = false;
         });
+        _loadBookmarkStates();
         HapticFeedback.heavyImpact();
       } else {
         throw Exception("Invalid JSON formatting");
       }
     } catch (e) {
       _loadingTimer?.cancel();
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to generate quiz. Please check your notes/topic length and try again.")),
-      );
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Failed to generate quiz. Please check your notes/topic length and try again.")),
+        );
+      }
     }
   }
 
@@ -209,6 +362,15 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
         HapticFeedback.mediumImpact();
       } else {
         HapticFeedback.vibrate();
+        // Auto-save incorrect answer to the Revision Bank
+        QuizRevisionService().saveQuestion(
+          question: q['question'] as String,
+          options: List<String>.from(q['options']),
+          correctIndex: q['correctIndex'] as int,
+          explanation: q['explanation'] as String,
+          userAnswerIndex: _selectedAnswerIndex,
+          isIncorrect: true,
+        );
       }
     });
   }
@@ -401,19 +563,114 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Scan Notes & Upload PDF quick action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _isScanningText ? null : _scanNotesFromCamera,
+                          icon: _isScanningText
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff10b981)),
+                                )
+                              : const Icon(Icons.camera_alt_rounded, size: 18),
+                          label: Text(_isScanningText ? "Scanning..." : "Scan Notes"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xff10b981),
+                            side: const BorderSide(color: Color(0xff10b981)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickPdfFile,
+                          icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                          label: const Text("Upload PDF"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blueAccent,
+                            side: const BorderSide(color: Colors.blueAccent),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Display selected PDF indicator card if any
+                  if (_selectedPdfFile != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withOpacity(0.08),
+                        border: Border.all(color: Colors.blueAccent.withOpacity(0.3), width: 1.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.picture_as_pdf_rounded, color: Colors.blueAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedPdfFile!.name,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "${(_selectedPdfFile!.size / (1024 * 1024)).toStringAsFixed(2)} MB",
+                                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.cancel_rounded, color: Colors.white30, size: 20),
+                            onPressed: () {
+                              setState(() {
+                                _selectedPdfFile = null;
+                                _pdfBytes = null;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Notes input box
                   TextField(
                     controller: _notesController,
                     maxLines: 7,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    enabled: _selectedPdfFile == null,
+                    style: TextStyle(
+                      color: _selectedPdfFile == null ? Colors.white : Colors.white24,
+                      fontSize: 14,
+                    ),
                     decoration: InputDecoration(
-                      labelText: "Paste Study Notes or Study Topic",
+                      labelText: _selectedPdfFile == null
+                          ? "Paste Study Notes or Study Topic"
+                          : "Notes field disabled (PDF Uploaded)",
                       labelStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-                      hintText: "Paste book extracts, syllabus chapters, or simple topic names like 'Newton's laws of motion NEET level'...",
+                      hintText: _selectedPdfFile == null
+                          ? "Paste book extracts, syllabus chapters, or simple topic names like 'Newton's laws of motion NEET level'..."
+                          : "Remove the selected PDF to write manual text notes.",
                       hintStyle: const TextStyle(color: Colors.white12, fontSize: 13),
                       alignLabelWithHint: true,
                       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white10)),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xff10b981))),
+                      disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white10)),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -582,9 +839,29 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
                     opacity: 0.08,
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Text(
-                        q['question'],
-                        style: const TextStyle(color: Colors.white, fontSize: 17, height: 1.4, fontWeight: FontWeight.bold),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              q['question'],
+                              style: const TextStyle(color: Colors.white, fontSize: 17, height: 1.4, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: Icon(
+                              _bookmarkedQuestions.contains(q['question'])
+                                  ? Icons.bookmark_rounded
+                                  : Icons.bookmark_border_rounded,
+                              color: _bookmarkedQuestions.contains(q['question'])
+                                  ? Colors.amber
+                                  : Colors.white38,
+                              size: 24,
+                            ),
+                            onPressed: _toggleBookmarkCurrentQuestion,
+                          ),
+                        ],
                       ),
                     ),
                   ),

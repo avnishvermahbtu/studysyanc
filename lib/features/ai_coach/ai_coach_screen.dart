@@ -7,11 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:studysync/features/ai_coach/backlog_screen.dart';
 import 'package:studysync/features/ai_coach/notes_to_quiz_screen.dart';
 import 'package:studysync/features/ai_coach/roadmap_screen.dart';
+import 'package:studysync/features/ai_coach/quiz_revision_screen.dart';
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import 'backlog_service.dart';
 import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
+import '../../../core/services/tts_service.dart';
 
 class AICoachScreen extends StatefulWidget {
   const AICoachScreen({super.key});
@@ -39,12 +41,21 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(seconds: 1),
     );
+    TTSService().addListener(_onTtsStateChanged);
     _loadCoachingAdvice();
+  }
+
+  void _onTtsStateChanged(String? text, bool isSpeaking) {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
     _refreshAnimController.dispose();
+    TTSService().removeListener(_onTtsStateChanged);
+    TTSService().stop(); // Stop speaking if screen is exited
     super.dispose();
   }
 
@@ -374,15 +385,33 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
                     ),
                   ],
                 ),
-                RotationTransition(
-                  turns: _refreshAnimController,
-                  child: IconButton(
-                    icon: Icon(Icons.refresh_rounded, color: const Color(0xff6366f1).withOpacity(0.8), size: 20),
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      _loadCoachingAdvice(forceRefresh: true);
-                    },
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        TTSService().isSpeakingText(_coachingMessage)
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        color: const Color(0xff6366f1).withOpacity(0.8),
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        TTSService().toggleSpeak(_coachingMessage);
+                      },
+                    ),
+                    RotationTransition(
+                      turns: _refreshAnimController,
+                      child: IconButton(
+                        icon: Icon(Icons.refresh_rounded, color: const Color(0xff6366f1).withOpacity(0.8), size: 20),
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          _loadCoachingAdvice(forceRefresh: true);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -530,6 +559,16 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
           icon: Icons.quiz_rounded,
           gradientColors: [const Color(0xff10b981), const Color(0xff059669)],
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotesToQuizScreen())),
+        ),
+        const SizedBox(height: 12),
+
+        // Smart Revision Bank Button
+        _buildModuleButton(
+          title: "Smart Revision Bank",
+          subtitle: "Revise mistakes & review bookmarked doubts",
+          icon: Icons.psychology_alt_rounded,
+          gradientColors: [const Color(0xfff59e0b), const Color(0xffd97706)],
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QuizRevisionScreen())),
         ),
       ],
     );

@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controller/routine_controller.dart';
 import 'routine_model.dart';
+import '../../../core/services/tts_service.dart';
 
 class RoutineScreen extends StatefulWidget {
   const RoutineScreen({super.key});
@@ -53,7 +54,14 @@ class _RoutineScreenState extends State<RoutineScreen> {
     super.initState();
     _controller = RoutineController();
     _controller.addListener(_onControllerUpdate);
+    TTSService().addListener(_onTtsStateChanged);
     _loadStudentName();
+  }
+
+  void _onTtsStateChanged(String? text, bool isSpeaking) {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadStudentName() async {
@@ -91,6 +99,8 @@ class _RoutineScreenState extends State<RoutineScreen> {
   @override
   void dispose() {
     _controller.removeListener(_onControllerUpdate);
+    TTSService().removeListener(_onTtsStateChanged);
+    TTSService().stop(); // Stop speaking if screen is exited
     titleController.dispose();
     locationController.dispose();
     super.dispose();
@@ -152,6 +162,28 @@ class _RoutineScreenState extends State<RoutineScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                TTSService().toggleSpeak(message);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.04),
+                  border: Border.all(color: Colors.white12, width: 1),
+                ),
+                child: Icon(
+                  TTSService().isSpeakingText(message)
+                      ? Icons.volume_off_rounded
+                      : Icons.volume_up_rounded,
+                  color: themeColor,
+                  size: 18,
+                ),
               ),
             ),
           ],
@@ -1175,6 +1207,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'routine_fab',
         onPressed: _showAddRoutineSheet,
         backgroundColor: Colors.transparent,
         elevation: 0,

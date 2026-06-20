@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum FocusTheme { forest, cosmic, cyberpunk, zen }
 enum FocusCategory { study, coding, writing, science, meditation }
@@ -308,6 +310,7 @@ class FocusController extends ChangeNotifier {
       onLevelUp?.call();
     }
     notifyListeners();
+    await syncToFirestore();
   }
 
   // Update Streak counts
@@ -338,6 +341,31 @@ class FocusController extends ChangeNotifier {
     await prefs.setInt("streak", _streak);
     await prefs.setString("lastDate", _lastDate);
     notifyListeners();
+    await syncToFirestore();
+  }
+
+  // Sync user metrics dynamically to global leaderboard collection
+  Future<void> syncToFirestore() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final name = user.displayName ?? "Student";
+        final email = user.email ?? "";
+        final cumulativeXp = ((_level - 1) * _level ~/ 2) * 250 + _xp;
+        await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
+          "uid": user.uid,
+          "name": name,
+          "email": email,
+          "xp": _xp,
+          "level": _level,
+          "streak": _streak,
+          "cumulativeXp": cumulativeXp,
+          "lastUpdated": FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      // safe fallback
+    }
   }
 
   // Update Weekly Completion stats

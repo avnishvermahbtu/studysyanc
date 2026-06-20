@@ -11,8 +11,10 @@ import '../widgets/dashboard_card.dart';
 import '../../ai_coach/roadmap_screen.dart';
 import '../../ai_coach/backlog_screen.dart';
 import '../../ai_coach/notes_to_quiz_screen.dart';
+import '../../ai_coach/leaderboard_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import '../../routine/screens/study_zones_screen.dart';
+import '../../group_study/screens/group_study_lobby_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Function(int)? onNavigate;
@@ -479,78 +481,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Row(
       children: [
         Expanded(
-          child: DashboardCard(
-            bgOpacity: 0.05,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Streak",
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
-                      ),
-                      Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 22),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "$streak Days",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+              );
+            },
+            child: DashboardCard(
+              bgOpacity: 0.05,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Streak",
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                        ),
+                        Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 22),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    streak > 0 ? "Keep it hot! 🔥" : "Start today! ⏱️",
-                    style: const TextStyle(color: Colors.white30, fontSize: 11),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      "$streak Days",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      streak > 0 ? "Keep it hot! 🔥" : "Start today! ⏱️",
+                      style: const TextStyle(color: Colors.white30, fontSize: 11),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: DashboardCard(
-            bgOpacity: 0.05,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Rank Level",
-                        style: TextStyle(color: Colors.white54, fontSize: 13),
-                      ),
-                      Icon(Icons.stars, color: Colors.amberAccent, size: 22),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Lvl $lvl",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+              );
+            },
+            child: DashboardCard(
+              bgOpacity: 0.05,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "Rank Level",
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                        ),
+                        Icon(Icons.stars, color: Colors.amberAccent, size: 22),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    rank,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.amberAccent.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      "Lvl $lvl",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      rank,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.amberAccent.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -752,6 +770,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "subtitle": "Geofenced Reminders",
         "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudyZonesScreen())),
         "color": const Color(0xff10b981),
+      },
+      {
+        "icon": Icons.people_outline_rounded,
+        "title": "Group Study",
+        "subtitle": "Sync Slide Rooms",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupStudyLobbyScreen())),
+        "color": const Color(0xffa855f7),
       },
     ];
 

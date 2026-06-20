@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import '../controller/focus_controller.dart';
+import '../../../core/services/tts_service.dart';
 
 class FocusScreen extends StatefulWidget {
   const FocusScreen({super.key});
@@ -36,6 +37,9 @@ class _FocusScreenState extends State<FocusScreen> {
     // Add listener to update UI on controller state changes
     _controller.addListener(_onControllerUpdate);
 
+    // Register TTS listener
+    TTSService().addListener(_onTtsStateChanged);
+
     _confettiController = ConfettiController(duration: const Duration(seconds: 3));
 
     // Setup controller callbacks
@@ -53,6 +57,12 @@ class _FocusScreenState extends State<FocusScreen> {
   }
 
   void _onControllerUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _onTtsStateChanged(String? text, bool isSpeaking) {
     if (mounted) {
       setState(() {});
     }
@@ -128,6 +138,8 @@ class _FocusScreenState extends State<FocusScreen> {
   void dispose() {
     _quoteTimer?.cancel();
     _controller.removeListener(_onControllerUpdate);
+    TTSService().removeListener(_onTtsStateChanged);
+    TTSService().stop(); // Stop speaking if screen is exited
     if (_controller.onLevelUp == _handleLevelUp) {
       _controller.onLevelUp = null;
     }
@@ -561,6 +573,28 @@ class _FocusScreenState extends State<FocusScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              TTSService().toggleSpeak(_getCompanionMessage());
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.04),
+                                border: Border.all(color: Colors.white12, width: 1),
+                              ),
+                              child: Icon(
+                                TTSService().isSpeakingText(_getCompanionMessage())
+                                    ? Icons.volume_off_rounded
+                                    : Icons.volume_up_rounded,
+                                color: accentColor,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ],

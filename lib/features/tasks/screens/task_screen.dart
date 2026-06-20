@@ -503,6 +503,7 @@ class _TaskScreenState extends State<TaskScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'task_fab',
         onPressed: showAddTaskSheet,
         backgroundColor: primaryColor,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -1302,7 +1303,7 @@ class _TaskScreenState extends State<TaskScreen> {
                                         } catch (e) {
                                           //
                                         }
-                                        if (context.mounted) {
+                                        if (mounted) {
                                           Navigator.pop(context);
                                         }
                                       },

@@ -330,6 +330,7 @@ class _StudyZonesScreenState extends State<StudyZonesScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'study_zones_fab',
         backgroundColor: const Color(0xff10b981),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         onPressed: _showAddZoneDialog,
