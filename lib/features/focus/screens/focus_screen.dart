@@ -275,83 +275,99 @@ class _FocusScreenState extends State<FocusScreen> {
           builder: (context, setModalState) {
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: _buildGlassCard(
-                blur: 25,
-                opacity: 0.15,
-                borderColor: _getAccentColor().withOpacity(0.2),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xff0b0f19),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                  border: Border.all(
+                    color: _getAccentColor().withOpacity(0.35),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.6),
+                      blurRadius: 30,
+                    ),
+                    BoxShadow(
+                      color: _getAccentColor().withOpacity(0.12),
+                      blurRadius: 20,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      const SizedBox(height: 20),
-                      Text(
-                        "Set Custom Focus Time",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                          shadows: [
-                            Shadow(color: _getAccentColor().withOpacity(0.3), blurRadius: 10)
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // MINUTES
-                          _buildTimeSelectorColumn("MINUTES", tempMin, (val) {
-                            if (val >= 1 && val <= 180) tempMin = val;
-                          }, setModalState),
-
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text(":", style: TextStyle(color: Colors.white38, fontSize: 30, fontWeight: FontWeight.bold)),
-                          ),
-
-                          // SECONDS
-                          _buildTimeSelectorColumn("SECONDS", tempSec, (val) {
-                            if (val >= 0 && val < 60) tempSec = val;
-                          }, setModalState),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      "Set Custom Focus Time",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        shadows: [
+                          Shadow(color: _getAccentColor().withOpacity(0.3), blurRadius: 10)
                         ],
                       ),
-                      const SizedBox(height: 35),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _getAccentColor(),
-                            foregroundColor: Colors.black,
-                            elevation: 8,
-                            shadowColor: _getAccentColor().withOpacity(0.4),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          onPressed: () {
-                            _controller.setTimerDuration(tempMin, tempSec);
-                            Navigator.pop(context);
-                          },
-                          child: const Text(
-                            "START FOCUS ZONE",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    ),
+                    const SizedBox(height: 30),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // MINUTES
+                        _buildTimeSelectorColumn("MINUTES", tempMin, (val) {
+                          if (val >= 1 && val <= 180) tempMin = val;
+                        }, setModalState),
+
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(":", style: TextStyle(color: Colors.white38, fontSize: 30, fontWeight: FontWeight.bold)),
+                        ),
+
+                        // SECONDS
+                        _buildTimeSelectorColumn("SECONDS", tempSec, (val) {
+                          if (val >= 0 && val < 60) tempSec = val;
+                        }, setModalState),
+                      ],
+                    ),
+                    const SizedBox(height: 35),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _getAccentColor(),
+                          foregroundColor: Colors.black,
+                          elevation: 8,
+                          shadowColor: _getAccentColor().withOpacity(0.4),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                      )
-                    ],
-                  ),
+                        onPressed: () {
+                          _controller.setTimerDuration(tempMin, tempSec);
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          "START FOCUS ZONE",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        ),
+                      ),
+                    )
+                  ],
                 ),
               ),
             );
@@ -364,12 +380,13 @@ class _FocusScreenState extends State<FocusScreen> {
   // Helper Widget for custom time selector columns
   Widget _buildTimeSelectorColumn(
       String label, int value, Function(int) onChanged, StateSetter setModalState) {
+    final accentColor = _getAccentColor();
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         const SizedBox(height: 6),
         Container(
@@ -377,7 +394,7 @@ class _FocusScreenState extends State<FocusScreen> {
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.03),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: accentColor.withOpacity(0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -389,7 +406,7 @@ class _FocusScreenState extends State<FocusScreen> {
                 onPressed: () => setModalState(() {
                   onChanged(value - (label == "MINUTES" ? 1 : 5));
                 }),
-                icon: const Icon(Icons.remove_circle_outline, color: Colors.white60),
+                icon: Icon(Icons.remove_circle_outline, color: accentColor),
               ),
               const SizedBox(width: 4),
               Text(
@@ -404,7 +421,7 @@ class _FocusScreenState extends State<FocusScreen> {
                 onPressed: () => setModalState(() {
                   onChanged(value + (label == "MINUTES" ? 1 : 5));
                 }),
-                icon: const Icon(Icons.add_circle_outline, color: Colors.white60),
+                icon: Icon(Icons.add_circle_outline, color: accentColor),
               ),
             ],
           ),
@@ -627,8 +644,8 @@ class _FocusScreenState extends State<FocusScreen> {
                             Text(
                               _controller.isBreak ? "BREAK IN PROGRESS" : "TAP TO CONFIGURE",
                               style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 10,
+                                color: _controller.isBreak ? Colors.white38 : accentColor.withOpacity(0.9),
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.5,
                                 shadows: [
@@ -988,6 +1005,7 @@ class _FocusScreenState extends State<FocusScreen> {
             _buildPresetChip("⚡ Sprint (15m)", 15),
             _buildPresetChip("🧠 Pomodoro (25m)", 25),
             _buildPresetChip("🎓 Deep Work (50m)", 50),
+            _buildPresetChip("⚙️ Custom", -1),
           ],
         ),
       ],
@@ -996,9 +1014,45 @@ class _FocusScreenState extends State<FocusScreen> {
 
   // Preset Selection Chip
   Widget _buildPresetChip(String label, int minutes) {
-    bool isSelected = _controller.maxSeconds == minutes * 60 && !_controller.isBreak;
     Color accentColor = _getAccentColor();
 
+    if (minutes == -1) {
+      return GestureDetector(
+        onTap: () {
+          if (_controller.isRunning) return;
+          HapticFeedback.selectionClick();
+          _showCustomDurationSheet();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            border: Border.all(
+              color: accentColor.withOpacity(0.4),
+              width: 1.2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.tune_rounded, size: 13, color: accentColor),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: accentColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    bool isSelected = _controller.maxSeconds == minutes * 60 && !_controller.isBreak;
     return GestureDetector(
       onTap: () {
         if (_controller.isRunning) return;

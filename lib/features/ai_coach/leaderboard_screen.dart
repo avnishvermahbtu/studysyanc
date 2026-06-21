@@ -60,10 +60,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with SingleTicker
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
       ),
       body: Stack(
         children: [

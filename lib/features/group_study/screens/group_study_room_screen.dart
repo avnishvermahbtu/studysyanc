@@ -106,6 +106,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
     _roomSubscription?.cancel();
     _annotationsSubscription?.cancel();
     _reactionsSubscription?.cancel();
+    _laserFadeTimer?.cancel();
     _chatController.dispose();
     _scrollController.dispose();
     _cleanupAgora();
@@ -450,10 +451,12 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
             });
             _laserFadeTimer?.cancel();
             _laserFadeTimer = Timer(const Duration(milliseconds: 1500), () {
-              setState(() {
-                _laserPosition = null;
-                _laserPresenterId = null;
-              });
+              if (mounted) {
+                setState(() {
+                  _laserPosition = null;
+                  _laserPresenterId = null;
+                });
+              }
             });
           }
         }

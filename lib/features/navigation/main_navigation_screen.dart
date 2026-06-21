@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../ai_coach/ai_coach_screen.dart';
 import '../dashboard/screens/dashboard_screen.dart';
@@ -7,6 +9,9 @@ import '../tasks/screens/task_screen.dart';
 import '../routine/screens/routine_screen.dart';
 import '../focus/screens/focus_screen.dart';
 import '../group_study/screens/group_study_lobby_screen.dart';
+import '../ai_coach/leaderboard_screen.dart';
+import '../../core/services/widget_service.dart';
+import '../focus/controller/focus_controller.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -17,6 +22,7 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int currentIndex = 0;
   late final List<Widget> screens;
+  StreamSubscription<QuerySnapshot>? _tasksSubscription;
 
   void navigateToTab(int index) {
     setState(() {
@@ -34,7 +40,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const TaskScreen(),
       const AICoachScreen(),
       const RoutineScreen(),
+      const LeaderboardScreen(),
     ];
+
+    // Setup real-time updates for native home screen widget
+    FocusController().addListener(_onWidgetUpdate);
+    _tasksSubscription = FirebaseFirestore.instance.collection("tasks").snapshots().listen((event) {
+      _onWidgetUpdate();
+    });
+    // Trigger initial widget update
+    _onWidgetUpdate();
+  }
+
+  void _onWidgetUpdate() {
+    WidgetService.updateWidgetData();
+  }
+
+  @override
+  void dispose() {
+    FocusController().removeListener(_onWidgetUpdate);
+    _tasksSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -46,6 +72,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       {"icon": Icons.emoji_events_rounded, "label": "Quests"},
       {"icon": Icons.forum_rounded, "label": "Coach"},
       {"icon": Icons.calendar_today_rounded, "label": "Schedule"},
+      {"icon": Icons.leaderboard_rounded, "label": "Leaderboard"},
     ];
 
     return Scaffold(
