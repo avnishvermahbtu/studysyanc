@@ -1131,6 +1131,9 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
                 ),
                 onPressed: () {
                   setState(() {
+                    _notesController.clear();
+                    _selectedPdfFile = null;
+                    _pdfBytes = null;
                     _questions.clear();
                   });
                 },

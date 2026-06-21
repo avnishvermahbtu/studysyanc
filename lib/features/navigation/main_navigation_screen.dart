@@ -6,6 +6,7 @@ import '../dashboard/screens/dashboard_screen.dart';
 import '../tasks/screens/task_screen.dart';
 import '../routine/screens/routine_screen.dart';
 import '../focus/screens/focus_screen.dart';
+import '../group_study/screens/group_study_lobby_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -28,10 +29,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.initState();
     screens = [
       DashboardScreen(onNavigate: navigateToTab),
-      const TaskScreen(),
-      const RoutineScreen(),
+      const GroupStudyLobbyScreen(),
       const FocusScreen(),
+      const TaskScreen(),
       const AICoachScreen(),
+      const RoutineScreen(),
     ];
   }
 
@@ -39,10 +41,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     final List<Map<String, dynamic>> navigationItems = [
       {"icon": Icons.home_rounded, "label": "Home"},
-      {"icon": Icons.task_alt_rounded, "label": "Quests"},
-      {"icon": Icons.calendar_today_rounded, "label": "Schedule"},
+      {"icon": Icons.groups_rounded, "label": "Co-Study"},
       {"icon": Icons.timer_rounded, "label": "Focus"},
+      {"icon": Icons.emoji_events_rounded, "label": "Quests"},
       {"icon": Icons.forum_rounded, "label": "Coach"},
+      {"icon": Icons.calendar_today_rounded, "label": "Schedule"},
     ];
 
     return Scaffold(
@@ -52,8 +55,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         children: screens,
       ),
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
         decoration: BoxDecoration(
           color: const Color(0xff0f172a).withOpacity(0.9),
           borderRadius: BorderRadius.circular(28),
@@ -93,7 +96,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: EdgeInsets.symmetric(horizontal: isSelected ? 10 : 8, vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? const Color(0xff6366f1).withOpacity(0.15)

@@ -8,6 +8,7 @@ import 'package:studysync/features/routine/screens/routine_model.dart';
 import 'package:studysync/features/routine/screens/routine_screen.dart';
 import 'package:studysync/login_page.dart';
 import 'package:studysync/firebase_options.dart';
+import 'package:studysync/features/group_study/screens/auto_join_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +35,24 @@ class MyApp extends StatelessWidget {
       home: FirebaseAuth.instance.currentUser == null
           ? const LoginPage()
           : const MainNavigationScreen(),
+      onGenerateRoute: (settings) {
+        final uri = Uri.parse(settings.name ?? '');
+        if (uri.path.startsWith('/join')) {
+          String? roomCode;
+          if (uri.pathSegments.length > 1) {
+            roomCode = uri.pathSegments[1];
+          } else {
+            roomCode = uri.queryParameters['code'];
+          }
+          if (roomCode != null && roomCode.isNotEmpty) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (context) => AutoJoinScreen(roomCode: roomCode!),
+            );
+          }
+        }
+        return null;
+      },
     );
   }
 }

@@ -12,6 +12,7 @@ import '../../ai_coach/roadmap_screen.dart';
 import '../../ai_coach/backlog_screen.dart';
 import '../../ai_coach/notes_to_quiz_screen.dart';
 import '../../ai_coach/leaderboard_screen.dart';
+import '../../ai_coach/quiz_revision_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import '../../routine/screens/study_zones_screen.dart';
 import '../../group_study/screens/group_study_lobby_screen.dart';
@@ -227,6 +228,185 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return "Good Morning 🌅";
+    } else if (hour >= 12 && hour < 17) {
+      return "Good Afternoon ☀️";
+    } else if (hour >= 17 && hour < 21) {
+      return "Good Evening 🌆";
+    } else {
+      return "Good Night 🌌";
+    }
+  }
+
+  Widget _buildLevelProgress() {
+    final xp = _focusController.xp;
+    final lvl = _focusController.level;
+    final nextLevelXp = _focusController.xpNeededForNextLevel();
+    final double pct = (xp / nextLevelXp).clamp(0.0, 1.0);
+    final rank = _focusController.getRankName();
+
+    return DashboardCard(
+      bgOpacity: 0.03,
+      glowColor: const Color(0xff6366f1),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.stars_rounded, color: Colors.amberAccent, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Level $lvl — $rank",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  "$xp / ${nextLevelXp} XP",
+                  style: const TextStyle(
+                    color: Color(0xffa5b4fc),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Stack(
+                children: [
+                  Container(
+                    height: 8,
+                    color: Colors.white.withOpacity(0.05),
+                  ),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: pct,
+                    child: Container(
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xff6366f1), Colors.pinkAccent],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeaturedModes() {
+    final List<Map<String, dynamic>> featured = [
+      {
+        "icon": Icons.timer_rounded,
+        "title": "Solo Focus",
+        "subtitle": "Pomodoro Timer",
+        "onTap": () => widget.onNavigate?.call(2), // Focus is index 2
+        "color": const Color(0xff6366f1),
+      },
+      {
+        "icon": Icons.groups_rounded,
+        "title": "Co-Study",
+        "subtitle": "Join Slide Rooms",
+        "onTap": () => widget.onNavigate?.call(1), // Co-Study is index 1
+        "color": const Color(0xff10b981),
+      },
+      {
+        "icon": Icons.psychology_rounded,
+        "title": "AI Mentor",
+        "subtitle": "Holographic Coach",
+        "onTap": () => widget.onNavigate?.call(4), // Coach is index 4
+        "color": Colors.pinkAccent,
+      },
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Featured Study Hub",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: featured.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final item = featured[index];
+              return SizedBox(
+                width: 155,
+                child: DashboardCard(
+                  onTap: item["onTap"],
+                  bgOpacity: 0.05,
+                  glowColor: item["color"],
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: item["color"].withOpacity(0.12),
+                          ),
+                          child: Icon(item["icon"], color: item["color"], size: 20),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          item["title"],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          item["subtitle"],
+                          style: const TextStyle(
+                            color: Colors.white30,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -244,16 +424,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             top: -100,
             right: -50,
             child: CircleAvatar(
-              radius: 150,
-              backgroundColor: const Color(0xff6366f1).withOpacity(0.1),
+              radius: 180,
+              backgroundColor: const Color(0xff6366f1).withOpacity(0.12),
             ),
           ),
           Positioned(
-            bottom: -50,
-            left: -50,
+            bottom: -80,
+            left: -80,
             child: CircleAvatar(
-              radius: 150,
-              backgroundColor: Colors.blue.withOpacity(0.05),
+              radius: 180,
+              backgroundColor: Colors.blue.withOpacity(0.08),
+            ),
+          ),
+          Positioned(
+            top: 300,
+            left: -100,
+            child: CircleAvatar(
+              radius: 140,
+              backgroundColor: Colors.pink.withOpacity(0.05),
             ),
           ),
 
@@ -264,15 +452,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(),
-                  const SizedBox(height: 24),
-                  _buildProgressCard(minutesToday, progressPct),
+                  const SizedBox(height: 16),
+                  _buildLevelProgress(),
                   const SizedBox(height: 20),
+                  _buildProgressCard(minutesToday, progressPct),
+                  const SizedBox(height: 16),
                   _buildStatsRow(),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
+                  _buildFeaturedModes(),
+                  const SizedBox(height: 24),
                   _buildQuestsHeader(),
                   const SizedBox(height: 12),
                   _buildQuestsList(),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
                   _buildActionsHeader(),
                   const SizedBox(height: 12),
                   _buildActionsGrid(),
@@ -296,7 +488,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Welcome Back, $_studentName 👋",
+                "${_getGreeting()}, $_studentName 👋",
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -716,32 +908,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildActionsGrid() {
     final List<Map<String, dynamic>> actions = [
       {
-        "icon": Icons.timer_outlined,
-        "title": "Start Focus",
-        "subtitle": "Pomodoro Timer",
-        "onTap": () => widget.onNavigate?.call(3),
-        "color": const Color(0xff6366f1),
-      },
-      {
         "icon": Icons.calendar_today_outlined,
         "title": "Timetable",
         "subtitle": "Daily Schedule",
-        "onTap": () => widget.onNavigate?.call(2),
+        "onTap": () => widget.onNavigate?.call(5), // Schedule is index 5
         "color": Colors.greenAccent,
       },
       {
         "icon": Icons.task_outlined,
         "title": "Questboard",
         "subtitle": "Add Study Tasks",
-        "onTap": () => widget.onNavigate?.call(1),
+        "onTap": () => widget.onNavigate?.call(3), // Quests is index 3
         "color": Colors.amberAccent,
-      },
-      {
-        "icon": Icons.smart_toy_outlined,
-        "title": "AI Coach",
-        "subtitle": "Holographic Mentor",
-        "onTap": () => widget.onNavigate?.call(4),
-        "color": Colors.pinkAccent,
       },
       {
         "icon": Icons.route_rounded,
@@ -765,6 +943,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "color": const Color(0xff34d399),
       },
       {
+        "icon": Icons.auto_stories_outlined,
+        "title": "Revision Bank",
+        "subtitle": "Smart Mistakes",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QuizRevisionScreen())),
+        "color": Colors.redAccent,
+      },
+      {
         "icon": Icons.add_location_alt_outlined,
         "title": "Study Zones",
         "subtitle": "Geofenced Reminders",
@@ -772,11 +957,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "color": const Color(0xff10b981),
       },
       {
-        "icon": Icons.people_outline_rounded,
-        "title": "Group Study",
-        "subtitle": "Sync Slide Rooms",
-        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupStudyLobbyScreen())),
-        "color": const Color(0xffa855f7),
+        "icon": Icons.leaderboard_outlined,
+        "title": "Leaderboard",
+        "subtitle": "Global Rank Board",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardScreen())),
+        "color": Colors.amberAccent,
       },
     ];
 

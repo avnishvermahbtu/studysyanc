@@ -5,6 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:studysync/features/navigation/main_navigation_screen.dart';
 import 'package:studysync/signup_page.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:studysync/features/group_study/screens/auto_join_screen.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -82,10 +86,19 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         Navigator.pop(context); // Dismiss loading loader
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
+        final pendingCode = PendingJoinService.pendingRoomCode;
+        if (pendingCode != null && pendingCode.isNotEmpty) {
+          PendingJoinService.pendingRoomCode = null; // Clear it
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => AutoJoinScreen(roomCode: pendingCode)),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+          );
+        }
       }
     } on FirebaseAuthException catch (ex) {
       if (mounted) {
@@ -96,6 +109,83 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         Navigator.pop(context);
         _showAlert("Error", "Something went wrong. Please check your credentials.");
+      }
+    }
+  }
+
+  Future<void> signInWithGoogle() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator(color: Color(0xff6366f1))),
+      );
+
+      UserCredential userCredential;
+
+      if (kIsWeb) {
+        // Web Google Sign-In via Firebase Auth Popup
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.setCustomParameters({'prompt': 'select_account'});
+        userCredential = await _auth.signInWithPopup(googleProvider);
+      } else {
+        // Mobile Google Sign-In via google_sign_in package
+        final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        if (googleUser == null) {
+          if (mounted) Navigator.pop(context);
+          return;
+        }
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final OAuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        userCredential = await _auth.signInWithCredential(credential);
+      }
+
+      final User? user = userCredential.user;
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final String displayName = user.displayName ?? "Student";
+        await prefs.setString('student_name', displayName);
+
+        final userDoc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
+            "uid": user.uid,
+            "name": displayName,
+            "email": user.email ?? "",
+            "xp": 0,
+            "level": 1,
+            "streak": 0,
+            "cumulativeXp": 0,
+            "lastUpdated": FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        final pendingCode = PendingJoinService.pendingRoomCode;
+        if (pendingCode != null && pendingCode.isNotEmpty) {
+          PendingJoinService.pendingRoomCode = null; // Clear it
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => AutoJoinScreen(roomCode: pendingCode)),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Dismiss loader
+        _showAlert("Error", "Google Sign-In failed: $e");
       }
     }
   }
@@ -288,9 +378,29 @@ class _LoginPageState extends State<LoginPage> {
                     // Social grid buttons
                     Row(
                       children: [
-                        Expanded(child: _buildSocialButton(icon: Icons.g_mobiledata_rounded, text: "Google", iconColor: const Color(0xffef4444))),
+                        Expanded(
+                          child: _buildSocialButton(
+                            icon: Icons.g_mobiledata_rounded,
+                            text: "Google",
+                            iconColor: const Color(0xffef4444),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              signInWithGoogle();
+                            },
+                          ),
+                        ),
                         const SizedBox(width: 16),
-                        Expanded(child: _buildSocialButton(icon: Icons.facebook_outlined, text: "Facebook", iconColor: const Color(0xff3b5998))),
+                        Expanded(
+                          child: _buildSocialButton(
+                            icon: Icons.facebook_outlined,
+                            text: "Facebook",
+                            iconColor: const Color(0xff3b5998),
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              // Facebook login not configured
+                            },
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 35),
@@ -323,11 +433,16 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // Social link widget
-  Widget _buildSocialButton({required IconData icon, required String text, required Color iconColor}) {
+  Widget _buildSocialButton({
+    required IconData icon,
+    required String text,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
     return _buildGlassCard(
       opacity: 0.04,
       child: InkWell(
-        onTap: () => HapticFeedback.selectionClick(),
+        onTap: onTap,
         borderRadius: BorderRadius.circular(30),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),

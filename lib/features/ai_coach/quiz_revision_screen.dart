@@ -50,7 +50,7 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(opacity),
-        border: Border.all(borderColor, width: 1.2),
+        border: Border.all(color: borderColor, width: 1.2),
         borderRadius: BorderRadius.circular(24),
       ),
       child: child,
@@ -180,10 +180,9 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
           );
         }
 
-        return Column(
+        return Stack(
           children: [
-            Expanded(
-              child: ListView.builder(
+            ListView.builder(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                 physics: const BouncingScrollPhysics(),
                 itemCount: docs.length,
@@ -204,29 +203,39 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
                       borderColor: isExpanded ? const Color(0xffef4444).withOpacity(0.3) : Colors.white10,
                       child: Column(
                         children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            title: Text(
-                              question,
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.4),
-                              maxLines: isExpanded ? 5 : 2,
-                              overflow: TextOverflow.ellipsis,
+                          Material(
+                            color: Colors.transparent,
+                            clipBehavior: Clip.antiAlias,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(24),
+                              topRight: const Radius.circular(24),
+                              bottomLeft: Radius.circular(isExpanded ? 0 : 24),
+                              bottomRight: Radius.circular(isExpanded ? 0 : 24),
                             ),
-                            subtitle: !isExpanded
-                                ? const Padding(
-                                    padding: EdgeInsets.only(top: 6),
-                                    child: Text("Tap to expand options and explanation guide.", style: TextStyle(color: Colors.white24, fontSize: 11)),
-                                  )
-                                : null,
-                            trailing: IconButton(
-                              icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xff10b981), size: 24),
-                              tooltip: "Mark Resolved",
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                _service.resolveIncorrect(doc.id);
-                              },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              title: Text(
+                                question,
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.4),
+                                maxLines: isExpanded ? 5 : 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: !isExpanded
+                                  ? const Padding(
+                                      padding: EdgeInsets.only(top: 6),
+                                      child: Text("Tap to expand options and explanation guide.", style: TextStyle(color: Colors.white24, fontSize: 11)),
+                                    )
+                                  : null,
+                              trailing: IconButton(
+                                icon: const Icon(Icons.check_circle_outline_rounded, color: Color(0xff10b981), size: 24),
+                                tooltip: "Mark Resolved",
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  _service.resolveIncorrect(doc.id);
+                                },
+                              ),
+                              onTap: () => _toggleExpand(doc.id),
                             ),
-                            onTap: () => _toggleExpand(doc.id),
                           ),
                           if (isExpanded) ...[
                             const Divider(color: Colors.white10, height: 1),
@@ -320,8 +329,7 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
                   );
                 },
               ),
-            ),
-            _buildPracticeButton(docs, "MISTAKES", const Color(0xffef4444)),
+              _buildPracticeButton(docs, "MISTAKES", const Color(0xffef4444)),
           ],
         );
       },
@@ -347,10 +355,9 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
           );
         }
 
-        return Column(
+        return Stack(
           children: [
-            Expanded(
-              child: ListView.builder(
+            ListView.builder(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                 physics: const BouncingScrollPhysics(),
                 itemCount: docs.length,
@@ -370,29 +377,39 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
                       borderColor: isExpanded ? const Color(0xfff59e0b).withOpacity(0.3) : Colors.white10,
                       child: Column(
                         children: [
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            title: Text(
-                              question,
-                              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.4),
-                              maxLines: isExpanded ? 5 : 2,
-                              overflow: TextOverflow.ellipsis,
+                          Material(
+                            color: Colors.transparent,
+                            clipBehavior: Clip.antiAlias,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(24),
+                              topRight: const Radius.circular(24),
+                              bottomLeft: Radius.circular(isExpanded ? 0 : 24),
+                              bottomRight: Radius.circular(isExpanded ? 0 : 24),
                             ),
-                            subtitle: !isExpanded
-                                ? const Padding(
-                                    padding: EdgeInsets.only(top: 6),
-                                    child: Text("Tap to expand options and explanation guide.", style: TextStyle(color: Colors.white24, fontSize: 11)),
-                                  )
-                                : null,
-                            trailing: IconButton(
-                              icon: const Icon(Icons.bookmark_rounded, color: Color(0xfff59e0b), size: 24),
-                              tooltip: "Remove Bookmark",
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                _service.removeBookmark(doc.id);
-                              },
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              title: Text(
+                                question,
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, height: 1.4),
+                                maxLines: isExpanded ? 5 : 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: !isExpanded
+                                  ? const Padding(
+                                      padding: EdgeInsets.only(top: 6),
+                                      child: Text("Tap to expand options and explanation guide.", style: TextStyle(color: Colors.white24, fontSize: 11)),
+                                    )
+                                  : null,
+                              trailing: IconButton(
+                                icon: const Icon(Icons.bookmark_rounded, color: Color(0xfff59e0b), size: 24),
+                                tooltip: "Remove Bookmark",
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  _service.removeBookmark(doc.id);
+                                },
+                              ),
+                              onTap: () => _toggleExpand(doc.id),
                             ),
-                            onTap: () => _toggleExpand(doc.id),
                           ),
                           if (isExpanded) ...[
                             const Divider(color: Colors.white10, height: 1),
@@ -480,8 +497,7 @@ class _QuizRevisionScreenState extends State<QuizRevisionScreen> with SingleTick
                   );
                 },
               ),
-            ),
-            _buildPracticeButton(docs, "DOUBTS", const Color(0xfff59e0b)),
+              _buildPracticeButton(docs, "DOUBTS", const Color(0xfff59e0b)),
           ],
         );
       },

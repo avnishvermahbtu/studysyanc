@@ -183,6 +183,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         _activeRoadmap = roadmap;
         _completedTasks.clear();
         _isLoading = false;
+        _topicController.clear();
+        _timelineController.clear();
       });
       HapticFeedback.heavyImpact();
     } catch (e) {
@@ -218,6 +220,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       await prefs.remove("active_roadmap");
       await prefs.remove("completed_roadmap_tasks");
       setState(() {
+        _topicController.clear();
+        _timelineController.clear();
         _activeRoadmap = null;
         _completedTasks.clear();
       });
