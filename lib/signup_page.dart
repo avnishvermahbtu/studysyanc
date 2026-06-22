@@ -100,7 +100,11 @@ class _SignupPageState extends State<SignupPage> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('student_name', name);
         }
-        _showAlert("Success", "Signup Successful! Log in to continue.", popToLogin: true);
+        // Direct transition back to login page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
       }
     } on FirebaseAuthException catch (ex) {
       if (mounted) {

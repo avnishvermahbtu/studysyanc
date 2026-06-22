@@ -37,6 +37,8 @@ class Task {
   bool xpAwarded;
   DateTime? dueDateTime;
   List<SubTask> subtasks;
+  bool isRecommended;
+  String recommendedBy;
 
   Task({
     this.id = "",
@@ -47,6 +49,8 @@ class Task {
     this.isDone = false,
     this.xpAwarded = false,
     this.subtasks = const [],
+    this.isRecommended = false,
+    this.recommendedBy = "",
   });
 
   /// Convert Firebase -> Task
@@ -67,6 +71,8 @@ class Task {
       isDone: data['isDone'] ?? false,
       xpAwarded: data['xpAwarded'] ?? false,
       subtasks: parsedSubtasks,
+      isRecommended: data['isRecommended'] ?? false,
+      recommendedBy: data['recommendedBy'] ?? '',
     );
   }
 
@@ -80,6 +86,8 @@ class Task {
       "isDone": isDone,
       "xpAwarded": xpAwarded,
       "subtasks": subtasks.map((x) => x.toMap()).toList(),
+      "isRecommended": isRecommended,
+      "recommendedBy": recommendedBy,
     };
   }
 }

@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'dart:ui';
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -290,6 +292,50 @@ class _GroupStudyLobbyScreenState extends State<GroupStudyLobbyScreen> with Sing
     }
   }
 
+  Future<String?> _uploadPdfToWeb(String localPath) async {
+    try {
+      final file = File(localPath);
+      if (!await file.exists()) return null;
+
+      final url = Uri.parse('https://tmpfiles.org/api/v1/upload');
+      final httpClient = HttpClient();
+      final request = await httpClient.postUrl(url);
+
+      final boundary = '----StudySyncFormBoundary${DateTime.now().millisecondsSinceEpoch}';
+      request.headers.set(HttpHeaders.contentTypeHeader, 'multipart/form-data; boundary=$boundary');
+
+      final fileName = localPath.split(Platform.pathSeparator).last;
+
+      final header = '--$boundary\r\n'
+          'Content-Disposition: form-data; name="file"; filename="$fileName"\r\n'
+          'Content-Type: application/pdf\r\n\r\n';
+      final footer = '\r\n--$boundary--\r\n';
+
+      final headerBytes = utf8.encode(header);
+      final footerBytes = utf8.encode(footer);
+      final fileBytes = await file.readAsBytes();
+
+      request.contentLength = headerBytes.length + fileBytes.length + footerBytes.length;
+      request.add(headerBytes);
+      request.add(fileBytes);
+      request.add(footerBytes);
+
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final decodedJson = jsonDecode(responseBody);
+        if (decodedJson['status'] == 'success') {
+          final originalUrl = decodedJson['data']['url'] as String;
+          final dlUrl = originalUrl.replaceFirst('tmpfiles.org/', 'tmpfiles.org/dl/');
+          return dlUrl;
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to upload PDF: $e");
+    }
+    return null;
+  }
+
   Future<void> _createRoom() async {
     final roomName = _roomNameController.text.trim();
     if (roomName.isEmpty) {
@@ -318,8 +364,18 @@ class _GroupStudyLobbyScreenState extends State<GroupStudyLobbyScreen> with Sing
         sharedPdfUrl = "none";
         sharedPdfName = "Discussion Session";
       } else if (_useLocalPdf) {
-        sharedPdfUrl = _localPdfPath ?? "";
-        sharedPdfName = _localPdfName ?? "Local Document.pdf";
+        final localPath = _localPdfPath ?? "";
+        if (localPath.isEmpty) {
+          throw Exception("No local PDF path specified.");
+        }
+        
+        final webUrl = await _uploadPdfToWeb(localPath);
+        if (webUrl == null || webUrl.isEmpty) {
+          throw Exception("Failed to upload PDF to cloud. Please check your internet connection.");
+        }
+        
+        sharedPdfUrl = webUrl;
+        sharedPdfName = _localPdfName ?? "Shared Document.pdf";
       } else if (_useCustomUrl) {
         sharedPdfUrl = _customUrlController.text.trim();
         sharedPdfName = sharedPdfUrl.split('/').last;

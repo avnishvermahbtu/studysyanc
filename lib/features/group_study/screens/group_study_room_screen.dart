@@ -619,126 +619,133 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                   top: BorderSide(color: Colors.white10, width: 1.5),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+              child: Material(
+                color: Colors.transparent,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Row(
+                          children: [
+                            Icon(Icons.admin_panel_settings_rounded, color: Color(0xff6366f1)),
+                            SizedBox(width: 10),
+                            Text(
+                              "Classroom Manager",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Audio Controls
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildControlsButton(
+                                label: "Mute All Mics",
+                                icon: Icons.mic_off_rounded,
+                                color: Colors.redAccent,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _muteAllMics();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildControlsButton(
+                                label: "Unmute All Mics",
+                                icon: Icons.mic_rounded,
+                                color: const Color(0xff10b981),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _unmuteAllMics();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+              
+                        // Toggles
+                        SwitchListTile(
+                          title: const Text("Lock Student Drawing", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                          subtitle: const Text("Prevent students from writing on the canvas", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          activeColor: const Color(0xff6366f1),
+                          value: room.studentDrawingDisabled,
+                          onChanged: (val) {
+                            _toggleStudentDrawing(val);
+                          },
+                        ),
+                        const Divider(color: Colors.white10),
+                        SwitchListTile(
+                          title: const Text("Lock Class Chat", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                          subtitle: const Text("Mute student messaging in dynamic chat panel", style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          activeColor: const Color(0xff6366f1),
+                          value: room.chatDisabled,
+                          onChanged: (val) {
+                            _toggleChatDisabled(val);
+                          },
+                        ),
+                        const Divider(color: Colors.white10),
+                        const SizedBox(height: 12),
+              
+                        // Attendance Registry & Notes Actions
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white.withOpacity(0.04),
+                                  side: const BorderSide(color: Colors.white10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _showAttendanceReport();
+                                },
+                                icon: const Icon(Icons.assignment_rounded, color: Color(0xff6366f1), size: 16),
+                                label: const Text("Attendance Registry", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white.withOpacity(0.04),
+                                  side: const BorderSide(color: Colors.white10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _showAddStickyNoteDialog();
+                                },
+                                icon: const Icon(Icons.note_add_rounded, color: Color(0xfffacc15), size: 16),
+                                label: const Text("Add Sticky Note", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  const Row(
-                    children: [
-                      Icon(Icons.admin_panel_settings_rounded, color: Color(0xff6366f1)),
-                      SizedBox(width: 10),
-                      Text(
-                        "Classroom Manager",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // Audio Controls
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildControlsButton(
-                          label: "Mute All Mics",
-                          icon: Icons.mic_off_rounded,
-                          color: Colors.redAccent,
-                          onTap: () {
-                            Navigator.pop(context);
-                            _muteAllMics();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildControlsButton(
-                          label: "Unmute All Mics",
-                          icon: Icons.mic_rounded,
-                          color: const Color(0xff10b981),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _unmuteAllMics();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Toggles
-                  SwitchListTile(
-                    title: const Text("Lock Student Drawing", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                    subtitle: const Text("Prevent students from writing on the canvas", style: TextStyle(color: Colors.white38, fontSize: 11)),
-                    activeColor: const Color(0xff6366f1),
-                    value: room.studentDrawingDisabled,
-                    onChanged: (val) {
-                      _toggleStudentDrawing(val);
-                    },
-                  ),
-                  const Divider(color: Colors.white10),
-                  SwitchListTile(
-                    title: const Text("Lock Class Chat", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                    subtitle: const Text("Mute student messaging in dynamic chat panel", style: TextStyle(color: Colors.white38, fontSize: 11)),
-                    activeColor: const Color(0xff6366f1),
-                    value: room.chatDisabled,
-                    onChanged: (val) {
-                      _toggleChatDisabled(val);
-                    },
-                  ),
-                  const Divider(color: Colors.white10),
-                  const SizedBox(height: 12),
-
-                  // Attendance Registry & Notes Actions
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.04),
-                            side: const BorderSide(color: Colors.white10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showAttendanceReport();
-                          },
-                          icon: const Icon(Icons.assignment_rounded, color: Color(0xff6366f1), size: 16),
-                          label: const Text("Attendance Registry", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white.withOpacity(0.04),
-                            side: const BorderSide(color: Colors.white10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showAddStickyNoteDialog();
-                          },
-                          icon: const Icon(Icons.note_add_rounded, color: Color(0xfffacc15), size: 16),
-                          label: const Text("Add Sticky Note", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             );
           },
@@ -1074,7 +1081,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
   Future<void> _initAudioCall() async {
     // 1. Request microphone permission
     final micStatus = await Permission.microphone.request();
-    if (micStatus.isDenied) {
+    if (!micStatus.isGranted) {
       setState(() {
         _useSimulatedAudio = true;
       });
@@ -1082,10 +1089,19 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
     }
 
     // 2. Setup Agora RtcEngine
-    // Note: Insert a placeholder App ID or use a simulated engine if app ID is not configured
-    const agoraAppId = ""; // Add Agora AppId here if available
+    // Note: Fetches Agora App ID dynamically from Firestore to allow customization.
+    String agoraAppId = "";
+    try {
+      final doc = await _db.collection('settings').doc('agora').get();
+      if (doc.exists) {
+        agoraAppId = doc.data()?['appId'] ?? "";
+      }
+    } catch (e) {
+      debugPrint("Error fetching Agora App ID from Firestore: $e");
+    }
 
     if (agoraAppId.isEmpty) {
+      debugPrint("Agora App ID is empty in settings/agora Firestore document. Falling back to simulated audio call.");
       setState(() {
         _useSimulatedAudio = true;
       });
@@ -1094,7 +1110,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
 
     try {
       _engine = createAgoraRtcEngine();
-      await _engine!.initialize(const RtcEngineContext(
+      await _engine!.initialize(RtcEngineContext(
         appId: agoraAppId,
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
@@ -1130,9 +1146,12 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
         options: const ChannelMediaOptions(
           channelProfile: ChannelProfileType.channelProfileCommunication,
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio: true,
         ),
       );
     } catch (e) {
+      debugPrint("Agora connection failed: $e");
       if (mounted) {
         setState(() {
           _useSimulatedAudio = true;
@@ -1192,6 +1211,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
 
   // TEXT CHAT SEND LOGIC
   Future<void> _sendMessage() async {
+    if (_chatDisabled && !_isPresenter) return;
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
@@ -1692,21 +1712,71 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                             ),
                           ),
 
-                        // 4. Page Number Pill indicator (PDF mode only)
+                        // 4. Page Number Pill indicator with Navigation Buttons (PDF mode only)
                         if (!_isWhiteboardActive && !_isPdfLoading && _localPdfPath != "none" && _localPdfPath != null)
                           Positioned(
                             bottom: 16,
                             right: 16,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.75),
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.black.withOpacity(0.85),
+                                borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: Colors.white10),
                               ),
-                              child: Text(
-                                "${_currentPage + 1} / $_totalPages",
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Previous Page Button
+                                  if (_isPresenter || !_isPageLocked)
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: const Icon(Icons.arrow_left_rounded, color: Colors.white70, size: 20),
+                                      onPressed: _currentPage > 0
+                                          ? () {
+                                              final targetPage = _currentPage - 1;
+                                              _pdfViewController?.setPage(targetPage);
+                                              setState(() {
+                                                _currentPage = targetPage;
+                                              });
+                                              if (_isPresenter) {
+                                                _db.collection('study_rooms').doc(widget.roomId).update({
+                                                  'currentPage': targetPage + 1,
+                                                });
+                                              }
+                                            }
+                                          : null,
+                                    ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: (_isPresenter || !_isPageLocked) ? 4.0 : 12.0,
+                                      vertical: (_isPresenter || !_isPageLocked) ? 0.0 : 8.0,
+                                    ),
+                                    child: Text(
+                                      "${_currentPage + 1} / $_totalPages",
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                  // Next Page Button
+                                  if (_isPresenter || !_isPageLocked)
+                                    IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      icon: const Icon(Icons.arrow_right_rounded, color: Colors.white70, size: 20),
+                                      onPressed: _currentPage < _totalPages - 1
+                                          ? () {
+                                              final targetPage = _currentPage + 1;
+                                              _pdfViewController?.setPage(targetPage);
+                                              setState(() {
+                                                _currentPage = targetPage;
+                                              });
+                                              if (_isPresenter) {
+                                                _db.collection('study_rooms').doc(widget.roomId).update({
+                                                  'currentPage': targetPage + 1,
+                                                });
+                                              }
+                                            }
+                                          : null,
+                                    ),
+                                ],
                               ),
                             ),
                           ),
@@ -2536,37 +2606,58 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
           child: Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _qnaInputController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: "Ask a formal question to the class...",
-                    hintStyle: const TextStyle(color: Colors.white24),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Colors.white10),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xff6366f1)),
-                    ),
-                  ),
-                  onSubmitted: (_) => _submitQuestion(),
-                ),
+                child: _chatDisabled && !_isPresenter
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.15)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.lock_rounded, color: Colors.redAccent, size: 14),
+                            SizedBox(width: 8),
+                            Text(
+                              "Host has disabled class Q&A.",
+                              style: TextStyle(color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ),
+                      )
+                    : TextField(
+                        controller: _qnaInputController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: "Ask a formal question to the class...",
+                          hintStyle: const TextStyle(color: Colors.white24),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Colors.white10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: Color(0xff6366f1)),
+                          ),
+                        ),
+                        onSubmitted: (_) => _submitQuestion(),
+                      ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _submitQuestion,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0xff6366f1),
+              if (!(_chatDisabled && !_isPresenter)) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _submitQuestion,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xff6366f1),
+                    ),
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
                   ),
-                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -2575,6 +2666,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
   }
 
   Future<void> _submitQuestion() async {
+    if (_chatDisabled && !_isPresenter) return;
     final txt = _qnaInputController.text.trim();
     if (txt.isEmpty) return;
     _qnaInputController.clear();

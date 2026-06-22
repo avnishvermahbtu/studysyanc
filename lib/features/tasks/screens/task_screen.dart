@@ -51,6 +51,8 @@ class TaskScreen extends StatefulWidget {
 class _TaskScreenState extends State<TaskScreen> {
   final titleController = TextEditingController();
   final descController = TextEditingController();
+  final recommendedByController = TextEditingController();
+  bool isRecommended = false;
   String selectedPriority = "Medium";
   DateTime? dueDateTime;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -82,6 +84,7 @@ class _TaskScreenState extends State<TaskScreen> {
     _focusController.removeListener(_onFocusUpdate);
     titleController.dispose();
     descController.dispose();
+    recommendedByController.dispose();
     _confettiController.dispose();
     _inlineControllers.values.forEach((c) => c.dispose());
     super.dispose();
@@ -240,6 +243,8 @@ class _TaskScreenState extends State<TaskScreen> {
                 dueDateTime: dueDateTime!,
                 isDone: false,
                 subtasks: [],
+                isRecommended: isRecommended,
+                recommendedBy: isRecommended ? recommendedByController.text.trim() : "",
               );
               await firestore.collection("tasks").add(task.toMap());
             },
@@ -321,6 +326,8 @@ class _TaskScreenState extends State<TaskScreen> {
       dueDateTime: dueDateTime!,
       isDone: false,
       subtasks: subtasks,
+      isRecommended: isRecommended,
+      recommendedBy: isRecommended ? recommendedByController.text.trim() : "",
     );
 
     await firestore.collection("tasks").add(task.toMap());
@@ -333,8 +340,10 @@ class _TaskScreenState extends State<TaskScreen> {
   void showAddTaskSheet() {
     titleController.clear();
     descController.clear();
+    recommendedByController.clear();
     dueDateTime = null;
     selectedPriority = "Medium";
+    isRecommended = false;
     bool aiDecompose = true;
 
     showModalBottomSheet(
@@ -409,11 +418,11 @@ class _TaskScreenState extends State<TaskScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.auto_awesome, color: Color(0xff6366f1), size: 20),
-                        const SizedBox(width: 8),
-                        const Text(
+                        Icon(Icons.auto_awesome, color: Color(0xff6366f1), size: 20),
+                        SizedBox(width: 8),
+                        Text(
                           "AI Subtask Strategy",
                           style: TextStyle(
                               color: Colors.white,
@@ -433,6 +442,40 @@ class _TaskScreenState extends State<TaskScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 15),
+                // Teacher Recommended Toggle Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.star_rounded, color: Colors.orangeAccent, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          "Teacher Recommended?",
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Switch(
+                      value: isRecommended,
+                      onChanged: (val) {
+                        setSheetState(() {
+                          isRecommended = val;
+                        });
+                      },
+                      activeColor: primaryColor,
+                    ),
+                  ],
+                ),
+                if (isRecommended) ...[
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                      recommendedByController, "Teacher Name (e.g. Prof. Amit)", Icons.person),
+                ],
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   onPressed: () async {
@@ -1285,8 +1328,34 @@ class _TaskScreenState extends State<TaskScreen> {
                                               ],
                                             ),
                                           ),
-                                          _buildXpValueBadge(task.priority),
-                                          _buildPriorityBadge(task.priority),
+                                            _buildXpValueBadge(task.priority),
+                                            _buildPriorityBadge(task.priority),
+                                            if (task.isRecommended)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  border: Border.all(color: Colors.orange.withOpacity(0.35)),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.star_rounded, size: 12, color: Colors.orange),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      task.recommendedBy.isNotEmpty
+                                                          ? "Rec: ${task.recommendedBy}"
+                                                          : "Recommended",
+                                                      style: const TextStyle(
+                                                        color: Colors.orange,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                         ],
                                       ),
                                     ],
