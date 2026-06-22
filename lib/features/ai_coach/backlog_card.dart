@@ -7,7 +7,11 @@ class BacklogCard extends StatelessWidget {
   final String priority;
   final int estimatedMinutes;
   final String notes;
+  final bool isToday;
   final Function(bool?) onChanged;
+  final Function(bool) onTodayChanged;
+  final VoidCallback onStartFocus;
+  final VoidCallback? onSplitAI;
   final VoidCallback onDelete;
 
   const BacklogCard({
@@ -18,7 +22,11 @@ class BacklogCard extends StatelessWidget {
     required this.priority,
     required this.estimatedMinutes,
     required this.notes,
+    required this.isToday,
     required this.onChanged,
+    required this.onTodayChanged,
+    required this.onStartFocus,
+    this.onSplitAI,
     required this.onDelete,
   });
 
@@ -59,20 +67,24 @@ class BacklogCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xff0f172a).withOpacity(0.7),
+        color: const Color(0xff0f172a).withOpacity(0.75),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: completed 
               ? Colors.green.withOpacity(0.3) 
-              : Colors.white.withOpacity(0.08),
-          width: 1.5,
+              : isToday 
+                  ? const Color(0xff6366f1).withOpacity(0.4)
+                  : Colors.white.withOpacity(0.08),
+          width: isToday && !completed ? 2.0 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
             color: completed
-                ? Colors.green.withOpacity(0.05)
-                : prioColor.withOpacity(0.05),
-            blurRadius: 10,
+                ? Colors.green.withOpacity(0.03)
+                : isToday
+                    ? const Color(0xff6366f1).withOpacity(0.08)
+                    : prioColor.withOpacity(0.03),
+            blurRadius: 12,
             spreadRadius: 1,
             offset: const Offset(0, 4),
           )
@@ -95,7 +107,7 @@ class BacklogCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header Row: Subject Badge, Priority Tag, Time Est
+                      // Header Row: Subject Badge, Priority Tag, Pin To Today, Time Est
                       Row(
                         children: [
                           Container(
@@ -133,6 +145,21 @@ class BacklogCard extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
+                          // Today's Commitment Pin Toggle
+                          if (!completed) ...[
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: EdgeInsets.zero,
+                              iconSize: 18,
+                              icon: Icon(
+                                isToday ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                                color: isToday ? const Color(0xfff59e0b) : Colors.white30,
+                              ),
+                              onPressed: () => onTodayChanged(!isToday),
+                              tooltip: isToday ? "Pinned to Today's Routine" : "Pin to Today's Routine",
+                            ),
+                            const SizedBox(width: 12),
+                          ],
                           // Time Duration Estimate
                           Row(
                             children: [
@@ -211,20 +238,56 @@ class BacklogCard extends StatelessWidget {
                       const SizedBox(height: 12),
                       const Divider(color: Colors.white10, height: 1),
                       const SizedBox(height: 6),
-                      // Actions row (e.g. Delete)
+                      // Actions row (Delete, Split with AI & Recover Timer Button)
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
-                              foregroundColor: Colors.redAccent.withOpacity(0.8),
-                            ),
-                            icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                            label: const Text('Delete', style: TextStyle(fontSize: 12)),
-                            onPressed: onDelete,
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  foregroundColor: Colors.redAccent.withOpacity(0.8),
+                                ),
+                                icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                                label: const Text('Delete', style: TextStyle(fontSize: 12)),
+                                onPressed: onDelete,
+                              ),
+                              if (!completed && onSplitAI != null) ...[
+                                const SizedBox(width: 12),
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                    foregroundColor: const Color(0xff818cf8),
+                                  ),
+                                  icon: const Icon(Icons.auto_awesome_outlined, size: 14),
+                                  label: const Text('Split', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  onPressed: onSplitAI,
+                                ),
+                              ],
+                            ],
                           ),
+                          if (!completed)
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xff6366f1).withOpacity(0.15),
+                                foregroundColor: const Color(0xff818cf8),
+                                side: BorderSide(color: const Color(0xff6366f1).withOpacity(0.3)),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              ),
+                              icon: const Icon(Icons.play_circle_outline_rounded, size: 16),
+                              label: const Text(
+                                'Recover Now',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: onStartFocus,
+                            ),
                         ],
                       ),
                     ],

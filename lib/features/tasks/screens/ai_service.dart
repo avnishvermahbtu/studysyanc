@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../../core/config/secrets.dart';
 import '../../../core/services/network_service.dart';
+import '../../ai_coach/backlog_model.dart';
 
 class AIService {
   static const apiKey = geminiApiKey;
@@ -248,6 +249,114 @@ Write a very brief, high-impact coaching advice (maximum 3 sentences). Do not in
       "Review core concepts of $title",
       "Draft a structured outline/summary",
       "Complete practice exercises and self-review",
+    ];
+  }
+
+  Future<String> generateBacklogStrategy(List<BacklogModel> pending) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
+    if (pending.isEmpty) {
+      return "All caught up! No backlogs pending. Keep maintaining your daily syllabus routine to stay ahead! ⚡";
+    }
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < pending.length; i++) {
+      final b = pending[i];
+      buffer.write("- [${b.subject}] ${b.chapter} | Priority: ${b.priority} | Est: ${b.estimatedMinutes}m\n");
+    }
+
+    final prompt = """
+You are "Sync", an elite AI academic mentor and study strategist for JEE/NEET aspirants. 
+Below is a list of pending backlog chapters for a student:
+${buffer.toString()}
+
+Your task is to analyze this list and provide a highly motivating, strategic, and concise backlog recovery recommendation for their daily routine.
+Address:
+1. Which specific chapter they should prioritize first today and why (consider priority and estimated duration).
+2. A brief, actionable tip on how to recover it in their daily schedule (e.g. block 45 minutes in early morning, do active recall).
+Keep the final recommendation under 3 sentences. Use energetic, direct, and supportive language. Return ONLY the recommendation text, no headings or markdown formatting.
+""";
+
+    try {
+      final response = await model.generateContent([Content.text(prompt)]);
+      return response.text?.trim() ?? "Ready to recover? Pick your highest priority backlog chapter, set the timer, and let's clear it! 🚀";
+    } catch (e) {
+      return "Ready to recover? Pick your highest priority backlog chapter, set the timer, and let's clear it! 🚀";
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> splitBacklogChapter({
+    required String subject,
+    required String chapter,
+    String notes = '',
+  }) async {
+    final hasInternet = await NetworkService().hasInternet();
+    if (!hasInternet) {
+      throw const SocketException("No internet connection.");
+    }
+
+    final prompt = """
+You are an expert JEE/NEET study mentor.
+Your task is to split the following backlog study chapter into 3 to 5 smaller, bite-sized micro-topics (each taking 20 to 45 minutes to complete).
+Subject: $subject
+Chapter: $chapter
+Original Notes: $notes
+
+Provide the result as a valid JSON array of objects. Each object MUST strictly follow this schema:
+{
+  "chapter": "subtopic name",
+  "estimatedMinutes": 30, // integer between 20 and 45
+  "notes": "one sentence instruction on what to study"
+}
+
+Return ONLY the raw valid JSON array. Do not include markdown code block syntax (like ```json or ```), explainers, or any additional text.
+""";
+
+    try {
+      final response = await model.generateContent([Content.text(prompt)]);
+      final text = response.text?.trim() ?? "";
+      if (text.isEmpty) {
+        return _fallbackSplits(chapter);
+      }
+
+      String cleanedText = _cleanJsonString(text);
+      final dynamic decoded = jsonDecode(cleanedText);
+      if (decoded is List) {
+        return decoded.map((e) {
+          final map = e as Map<String, dynamic>;
+          return {
+            'chapter': map['chapter']?.toString().trim() ?? 'Review Concept',
+            'estimatedMinutes': map['estimatedMinutes'] is int ? map['estimatedMinutes'] : 30,
+            'notes': map['notes']?.toString().trim() ?? '',
+          };
+        }).toList();
+      }
+      return _fallbackSplits(chapter);
+    } catch (e) {
+      return _fallbackSplits(chapter);
+    }
+  }
+
+  List<Map<String, dynamic>> _fallbackSplits(String chapter) {
+    return [
+      {
+        'chapter': '$chapter: Basic Concepts & Formulas',
+        'estimatedMinutes': 30,
+        'notes': 'Study core formulas and standard cases.',
+      },
+      {
+        'chapter': '$chapter: Practice MCQs & Active Recall',
+        'estimatedMinutes': 40,
+        'notes': 'Solve 10 practice questions and check answers.',
+      },
+      {
+        'chapter': '$chapter: Revision & Weak Areas',
+        'estimatedMinutes': 30,
+        'notes': 'Re-run incorrect answers and make short summary notes.',
+      },
     ];
   }
 }

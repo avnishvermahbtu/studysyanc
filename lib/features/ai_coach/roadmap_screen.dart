@@ -28,8 +28,10 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
   Timer? _loadingTimer;
   int _loadingIndex = 0;
 
+  List<Roadmap> _savedRoadmaps = [];
   Roadmap? _activeRoadmap;
   Set<String> _completedTasks = {};
+  bool _showForm = false;
 
   bool _isOffline = false;
   bool _isCheckingConnection = false;
@@ -56,25 +58,51 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     super.dispose();
   }
 
-  // Load roadmap and completion progress from SharedPreferences
+  // Load roadmaps and completion progress from SharedPreferences
   Future<void> _loadRoadmapData() async {
     final prefs = await SharedPreferences.getInstance();
-    final roadmapJson = prefs.getString("active_roadmap");
-    if (roadmapJson != null) {
+    
+    final savedJsonList = prefs.getStringList("saved_roadmaps") ?? [];
+    List<Roadmap> loadedRoadmaps = [];
+    for (var jsonStr in savedJsonList) {
       try {
-        setState(() {
-          _activeRoadmap = Roadmap.fromJson(roadmapJson);
-          _completedTasks = Set<String>.from(prefs.getStringList("completed_roadmap_tasks") ?? []);
-        });
+        loadedRoadmaps.add(Roadmap.fromJson(jsonStr));
       } catch (e) {
-        // Corrupted cache clearance
-        await prefs.remove("active_roadmap");
+        // Skip corrupted ones
       }
     }
+
+    final activeTitle = prefs.getString("active_roadmap_title");
+    Roadmap? active;
+    if (loadedRoadmaps.isNotEmpty) {
+      if (activeTitle != null) {
+        active = loadedRoadmaps.firstWhere(
+          (r) => r.title == activeTitle,
+          orElse: () => loadedRoadmaps.first,
+        );
+      } else {
+        active = loadedRoadmaps.first;
+      }
+    }
+
+    Set<String> completed = {};
+    if (active != null) {
+      completed = Set<String>.from(
+        prefs.getStringList("completed_tasks_${active.title}") ?? [],
+      );
+    }
+
+    setState(() {
+      _savedRoadmaps = loadedRoadmaps;
+      _activeRoadmap = active;
+      _completedTasks = completed;
+      _showForm = loadedRoadmaps.isEmpty;
+    });
   }
 
   // Save completion checklist state to preferences
   Future<void> _toggleTask(String taskId) async {
+    if (_activeRoadmap == null) return;
     HapticFeedback.lightImpact();
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -84,7 +112,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         _completedTasks.add(taskId);
       }
     });
-    await prefs.setStringList("completed_roadmap_tasks", _completedTasks.toList());
+    await prefs.setStringList("completed_tasks_${_activeRoadmap!.title}", _completedTasks.toList());
   }
 
   Future<void> _checkInternetConnection() async {
@@ -156,7 +184,6 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       _loadingMessage = _loadingSteps[0];
     });
 
-    // Rotate loading status strings for rich micro-interactions
     _loadingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted) {
         setState(() {
@@ -174,15 +201,25 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         throw Exception("Empty response received from API");
       }
 
-      final roadmap = Roadmap.fromJson(jsonResponse);
+      final newRoadmap = Roadmap.fromJson(jsonResponse);
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("active_roadmap", jsonResponse);
-      await prefs.remove("completed_roadmap_tasks");
+      
+      List<Roadmap> updatedRoadmaps = List.from(_savedRoadmaps);
+      updatedRoadmaps.removeWhere((r) => r.title.toLowerCase() == newRoadmap.title.toLowerCase());
+      updatedRoadmaps.insert(0, newRoadmap);
+
+      final jsonList = updatedRoadmaps.map((r) => r.toJson()).toList();
+      await prefs.setStringList("saved_roadmaps", jsonList);
+      
+      await prefs.setString("active_roadmap_title", newRoadmap.title);
+      await prefs.remove("completed_tasks_${newRoadmap.title}");
 
       setState(() {
-        _activeRoadmap = roadmap;
+        _savedRoadmaps = updatedRoadmaps;
+        _activeRoadmap = newRoadmap;
         _completedTasks.clear();
         _isLoading = false;
+        _showForm = false;
         _topicController.clear();
         _timelineController.clear();
       });
@@ -200,14 +237,15 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
   // Clear current active roadmap
   Future<void> _clearRoadmap() async {
+    if (_activeRoadmap == null) return;
     HapticFeedback.selectionClick();
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xff0f172a),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Colors.white10)),
-        title: const Text("Reset Roadmap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text("Are you sure you want to delete this roadmap? Your progress will be lost.", style: TextStyle(color: Colors.white70)),
+        title: const Text("Delete Roadmap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text("Are you sure you want to delete the roadmap for '${_activeRoadmap!.title}'? Your progress will be lost.", style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: Colors.white54))),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
@@ -217,13 +255,30 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
     if (confirm == true) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove("active_roadmap");
-      await prefs.remove("completed_roadmap_tasks");
+      
+      List<Roadmap> updatedRoadmaps = List.from(_savedRoadmaps);
+      final deletedTitle = _activeRoadmap!.title;
+      updatedRoadmaps.removeWhere((r) => r.title == deletedTitle);
+      
+      final jsonList = updatedRoadmaps.map((r) => r.toJson()).toList();
+      await prefs.setStringList("saved_roadmaps", jsonList);
+      await prefs.remove("completed_tasks_$deletedTitle");
+
+      Roadmap? nextActive;
+      Set<String> completed = {};
+      if (updatedRoadmaps.isNotEmpty) {
+        nextActive = updatedRoadmaps.first;
+        await prefs.setString("active_roadmap_title", nextActive.title);
+        completed = Set<String>.from(prefs.getStringList("completed_tasks_${nextActive.title}") ?? []);
+      } else {
+        await prefs.remove("active_roadmap_title");
+      }
+
       setState(() {
-        _topicController.clear();
-        _timelineController.clear();
-        _activeRoadmap = null;
-        _completedTasks.clear();
+        _savedRoadmaps = updatedRoadmaps;
+        _activeRoadmap = nextActive;
+        _completedTasks = completed;
+        _showForm = updatedRoadmaps.isEmpty;
       });
     }
   }
@@ -251,26 +306,93 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     return Scaffold(
       backgroundColor: const Color(0xff020617),
       appBar: AppBar(
-        title: const Text("🚀 AI Study Roadmap", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
+        title: _savedRoadmaps.length > 1 && !_showForm
+            ? PopupMenuButton<Roadmap>(
+                color: const Color(0xff0d0e15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: Colors.white10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _activeRoadmap!.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70),
+                  ],
+                ),
+                onSelected: (Roadmap selected) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString("active_roadmap_title", selected.title);
+                  final completed = Set<String>.from(
+                    prefs.getStringList("completed_tasks_${selected.title}") ?? [],
+                  );
+                  setState(() {
+                    _activeRoadmap = selected;
+                    _completedTasks = completed;
+                  });
+                },
+                itemBuilder: (context) {
+                  return _savedRoadmaps.map((r) {
+                    final isCurrent = r.title == _activeRoadmap!.title;
+                    return PopupMenuItem<Roadmap>(
+                      value: r,
+                      child: Text(
+                        r.title,
+                        style: TextStyle(
+                          color: isCurrent ? const Color(0xff6366f1) : Colors.white,
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  }).toList();
+                },
+              )
+            : Text(
+                _showForm ? "Generate Roadmap" : (_activeRoadmap?.title ?? "AI Study Roadmap"),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_showForm && _savedRoadmaps.isNotEmpty) {
+              setState(() {
+                _showForm = false;
+              });
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
-        actions: _activeRoadmap != null
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                  onPressed: _clearRoadmap,
-                )
-              ]
-            : null,
+        actions: [
+          if (!_showForm) ...[
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xff6366f1)),
+              onPressed: () {
+                setState(() {
+                  _showForm = true;
+                });
+              },
+            ),
+            if (_activeRoadmap != null)
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                onPressed: _clearRoadmap,
+              ),
+          ],
+        ],
       ),
       body: Stack(
         children: [
-          // Background design elements
           Positioned(
             top: -100,
             right: -50,
@@ -291,7 +413,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
           SafeArea(
             child: _isLoading
                 ? _buildLoadingState()
-                : _activeRoadmap == null
+                : (_showForm || _activeRoadmap == null)
                     ? _buildGenerationForm()
                     : _buildRoadmapTimeline(),
           ),
@@ -431,6 +553,32 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                       ),
                     ),
                   ),
+                  if (_savedRoadmaps.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 55,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _showForm = false;
+                          });
+                        },
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.close_rounded, size: 20),
+                            SizedBox(width: 8),
+                            Text("CANCEL & BACK", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

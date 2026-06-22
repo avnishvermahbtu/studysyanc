@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:confetti/confetti.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'backlog_card.dart';
 import 'backlog_service.dart';
 import 'backlog_model.dart';
+import 'backlog_focus_timer_screen.dart';
+import '../tasks/screens/ai_service.dart';
+import 'backlog_pie_chart.dart';
 
 class BacklogScreen extends StatefulWidget {
   const BacklogScreen({super.key});
@@ -19,10 +23,131 @@ class _BacklogScreenState extends State<BacklogScreen> {
   final notesController = TextEditingController();
   late ConfettiController _confettiController;
 
+  final AIService aiService = AIService();
+  String _aiRecommendation = "";
+  bool _isLoadingAI = false;
+  int? _lastPendingCount;
+
+  bool _isSplitting = false;
+  String _splittingChapter = "";
+
   @override
   void initState() {
     super.initState();
     _confettiController = ConfettiController(duration: const Duration(seconds: 1));
+  }
+
+  Future<void> _handleSplitBacklog(BacklogModel parent) async {
+    setState(() {
+      _isSplitting = true;
+      _splittingChapter = parent.chapter;
+    });
+
+    try {
+      final subtasks = await aiService.splitBacklogChapter(
+        subject: parent.subject,
+        chapter: parent.chapter,
+        notes: parent.notes,
+      );
+
+      // 1. Delete original parent backlog
+      await service.deleteBacklog(parent.id);
+
+      // 2. Add each subtask as a new individual backlog
+      for (final sub in subtasks) {
+        await service.addBacklog(
+          subject: parent.subject,
+          chapter: sub['chapter'] as String,
+          priority: parent.priority, // Preserve priority
+          estimatedMinutes: sub['estimatedMinutes'] as int,
+          notes: sub['notes'] as String,
+        );
+      }
+
+      _confettiController.play();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("✨ Successfully split '${parent.chapter}' into ${subtasks.length} topics!"),
+            backgroundColor: const Color(0xff6366f1),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("❌ Failed to split chapter. Please check internet connection."),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSplitting = false;
+          _splittingChapter = "";
+        });
+      }
+    }
+  }
+
+  Future<void> _loadAICoachAdvice(List<BacklogModel> pendingList, {bool forceRefresh = false}) async {
+    if (pendingList.isEmpty) {
+      setState(() {
+        _aiRecommendation = "🎉 All caught up! Keep attending lectures and practicing to stay backlog-free.";
+      });
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final cachedAdvice = prefs.getString("backlog_ai_advice");
+    final lastFetchTime = prefs.getInt("backlog_ai_advice_time") ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // Cache recommendation for 2 hours unless forceRefresh is true
+    if (!forceRefresh && cachedAdvice != null && (now - lastFetchTime) < 7200000) {
+      setState(() {
+        _aiRecommendation = cachedAdvice;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingAI = true;
+    });
+
+    try {
+      final advice = await aiService.generateBacklogStrategy(pendingList);
+      await prefs.setString("backlog_ai_advice", advice);
+      await prefs.setInt("backlog_ai_advice_time", now);
+      if (mounted) {
+        setState(() {
+          _aiRecommendation = advice;
+          _isLoadingAI = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _aiRecommendation = "Ready to recover? Let's conquer the highest priority backlog topic in your list today!";
+          _isLoadingAI = false;
+        });
+      }
+    }
+  }
+
+  void _triggerAIFetchIfNeeded(List<BacklogModel> pendingList) {
+    if (_lastPendingCount == null || _lastPendingCount != pendingList.length) {
+      _lastPendingCount = pendingList.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadAICoachAdvice(pendingList);
+      });
+    }
   }
 
   @override
@@ -93,7 +218,12 @@ class _BacklogScreenState extends State<BacklogScreen> {
               final completedCount = completedList.length;
               final pendingCount = total - completedCount;
 
+              _triggerAIFetchIfNeeded(pendingList);
+
               final progress = total == 0 ? 0.0 : completedCount / total;
+
+              final todayCommitment = pendingList.where((b) => b.isToday).toList();
+              final otherPending = pendingList.where((b) => !b.isToday).toList();
 
               if (total == 0) {
                 return Center(
@@ -242,11 +372,103 @@ class _BacklogScreenState extends State<BacklogScreen> {
 
               const SizedBox(height: 16),
 
+              // Subject Breakdown Donut Chart
+              BacklogPieChart(
+                subjectCounts: {
+                  "Physics": pendingList.where((b) => b.subject.toLowerCase() == 'physics').length,
+                  "Chemistry": pendingList.where((b) => b.subject.toLowerCase() == 'chemistry').length,
+                  "Mathematics": pendingList.where((b) => b.subject.toLowerCase() == 'mathematics' || b.subject.toLowerCase() == 'math').length,
+                  "Biology": pendingList.where((b) => b.subject.toLowerCase() == 'biology').length,
+                  "Other": pendingList.where((b) => 
+                    b.subject.toLowerCase() != 'physics' && 
+                    b.subject.toLowerCase() != 'chemistry' && 
+                    b.subject.toLowerCase() != 'mathematics' && 
+                    b.subject.toLowerCase() != 'math' && 
+                    b.subject.toLowerCase() != 'biology'
+                  ).length,
+                },
+              ),
+
+              const SizedBox(height: 8),
+
               // AI Coach Advice
               _buildAICoachCard(pendingList),
 
-              const SizedBox(height: 12),
 
+              // Today's Commitment Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.push_pin_rounded, color: Color(0xfff59e0b), size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "TODAY'S COMMITMENT (${todayCommitment.length})",
+                      style: const TextStyle(
+                        color: Color(0xfffbbf24),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (todayCommitment.isEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff0f172a).withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.04)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "No commitments for today. Pin 📌 backlogs below to prioritize them!",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    ),
+                  ),
+                )
+              else
+                ...todayCommitment.map((backlog) {
+                  return BacklogCard(
+                    subject: backlog.subject,
+                    chapter: backlog.chapter,
+                    completed: backlog.completed,
+                    priority: backlog.priority,
+                    estimatedMinutes: backlog.estimatedMinutes,
+                    notes: backlog.notes,
+                    isToday: backlog.isToday,
+                    onChanged: (value) {
+                      if (value == true) {
+                        _confettiController.play();
+                      }
+                      service.toggleStatus(backlog.id, value ?? false);
+                    },
+                    onTodayChanged: (value) {
+                      service.toggleTodayStatus(backlog.id, value);
+                    },
+                    onStartFocus: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BacklogFocusTimerScreen(backlog: backlog),
+                        ),
+                      );
+                    },
+                    onSplitAI: () => _handleSplitBacklog(backlog),
+                    onDelete: () {
+                      service.deleteBacklog(backlog.id);
+                    },
+                  );
+                }).toList(),
+
+              const SizedBox(height: 16),
+
+              // Other Pending Section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
@@ -254,7 +476,7 @@ class _BacklogScreenState extends State<BacklogScreen> {
                     const Icon(Icons.list_alt_rounded, color: Colors.white70, size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      "YOUR BACKLOG LIST (${pendingList.length} PENDING)",
+                      "ALL PENDING BACKLOGS (${otherPending.length})",
                       style: const TextStyle(
                         color: Colors.white70,
                         fontWeight: FontWeight.bold,
@@ -266,26 +488,100 @@ class _BacklogScreenState extends State<BacklogScreen> {
                 ),
               ),
 
-              // Backlog List
-              ...allBacklogs.map((backlog) {
-                return BacklogCard(
-                  subject: backlog.subject,
-                  chapter: backlog.chapter,
-                  completed: backlog.completed,
-                  priority: backlog.priority,
-                  estimatedMinutes: backlog.estimatedMinutes,
-                  notes: backlog.notes,
-                  onChanged: (value) {
-                    if (value == true) {
-                      _confettiController.play();
-                    }
-                    service.toggleStatus(backlog.id, value ?? false);
-                  },
-                  onDelete: () {
-                    service.deleteBacklog(backlog.id);
-                  },
-                );
-              }).toList(),
+              if (otherPending.isEmpty && todayCommitment.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xff0f172a).withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.04)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "Awesome! All pending items are committed for today. Let's recover them! ⚡",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    ),
+                  ),
+                )
+              else
+                ...otherPending.map((backlog) {
+                  return BacklogCard(
+                    subject: backlog.subject,
+                    chapter: backlog.chapter,
+                    completed: backlog.completed,
+                    priority: backlog.priority,
+                    estimatedMinutes: backlog.estimatedMinutes,
+                    notes: backlog.notes,
+                    isToday: backlog.isToday,
+                    onChanged: (value) {
+                      if (value == true) {
+                        _confettiController.play();
+                      }
+                      service.toggleStatus(backlog.id, value ?? false);
+                    },
+                    onTodayChanged: (value) {
+                      service.toggleTodayStatus(backlog.id, value);
+                    },
+                    onStartFocus: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BacklogFocusTimerScreen(backlog: backlog),
+                        ),
+                      );
+                    },
+                    onSplitAI: () => _handleSplitBacklog(backlog),
+                    onDelete: () {
+                      service.deleteBacklog(backlog.id);
+                    },
+                  );
+                }).toList(),
+
+              // Completed Section
+              if (completedList.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "COMPLETED / RECOVERED (${completedList.length})",
+                        style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ...completedList.map((backlog) {
+                  return BacklogCard(
+                    subject: backlog.subject,
+                    chapter: backlog.chapter,
+                    completed: backlog.completed,
+                    priority: backlog.priority,
+                    estimatedMinutes: backlog.estimatedMinutes,
+                    notes: backlog.notes,
+                    isToday: backlog.isToday,
+                    onChanged: (value) {
+                      service.toggleStatus(backlog.id, value ?? false);
+                    },
+                    onTodayChanged: (value) {
+                      service.toggleTodayStatus(backlog.id, value);
+                    },
+                    onStartFocus: () {},
+                    onDelete: () {
+                      service.deleteBacklog(backlog.id);
+                    },
+                  );
+                }).toList(),
+              ],
             ],
           );
         },
@@ -306,6 +602,43 @@ class _BacklogScreenState extends State<BacklogScreen> {
           ],
         ),
       ),
+      if (_isSplitting)
+        Container(
+          color: Colors.black.withOpacity(0.75),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  "AI Coach is splitting:",
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    _splittingChapter,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Breaking down into bite-sized recovery topics... ⚡",
+                  style: TextStyle(color: Colors.white54, fontSize: 13, fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
+        ),
     ],
   )
     );
@@ -355,17 +688,6 @@ class _BacklogScreenState extends State<BacklogScreen> {
       );
     }
 
-    // Pick target: Sort by priority first (High > Medium > Low)
-    final sortedPending = List<BacklogModel>.from(pending);
-    sortedPending.sort((a, b) {
-      const priorityWeights = {'High': 3, 'Medium': 2, 'Low': 1};
-      final weightA = priorityWeights[a.priority] ?? 2;
-      final weightB = priorityWeights[b.priority] ?? 2;
-      return weightB.compareTo(weightA);
-    });
-
-    final target = sortedPending.first;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
@@ -388,45 +710,53 @@ class _BacklogScreenState extends State<BacklogScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "AI Coach Strategy Advice",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "AI Coach Study Strategy",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (!_isLoadingAI)
+                      IconButton(
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.refresh_rounded, color: Colors.white38, size: 18),
+                        onPressed: () => _loadAICoachAdvice(pending, forceRefresh: true),
+                        tooltip: "Refresh Advice",
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 6),
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                if (_isLoadingAI)
+                  Row(
                     children: [
-                      const TextSpan(text: "Let's conquer your "),
-                      TextSpan(
-                        text: "${target.subject} backlog: ",
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                      TextSpan(
-                        text: target.chapter,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xffa5b4fc),
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xff818cf8)),
                         ),
                       ),
-                      const TextSpan(text: " first! It is marked as "),
-                      TextSpan(
-                        text: "${target.priority} Priority",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: target.priority.toLowerCase() == 'high'
-                              ? const Color(0xfff87171)
-                              : const Color(0xfffb923c),
-                        ),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Sync Coach is thinking...",
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 13, fontStyle: FontStyle.italic),
                       ),
-                      TextSpan(text: " and will take about ${target.estimatedMinutes} minutes to clear."),
                     ],
+                  )
+                else
+                  Text(
+                    _aiRecommendation.isNotEmpty
+                        ? _aiRecommendation
+                        : "Ready to recover? Let's clear the highest priority chapters first. Tap 'Recover Now' to start a session!",
+                    style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
                   ),
-                ),
               ],
             ),
           ),

@@ -32,6 +32,8 @@ class BacklogService {
       'priority': priority,
       'estimatedMinutes': estimatedMinutes,
       'notes': notes,
+      'isToday': false,
+      'completedAt': null,
       'createdAt': Timestamp.now(),
     });
   }
@@ -45,20 +47,33 @@ class BacklogService {
   }
 
   Future<void> toggleStatus(
-      String docId,
-      bool value,
-      ) async {
+    String docId,
+    bool value,
+  ) async {
     await firestore
         .collection('backlogs')
         .doc(docId)
         .update({
       'completed': value,
+      'completedAt': value ? Timestamp.now() : null,
+    });
+  }
+
+  Future<void> toggleTodayStatus(
+    String docId,
+    bool isToday,
+  ) async {
+    await firestore
+        .collection('backlogs')
+        .doc(docId)
+        .update({
+      'isToday': isToday,
     });
   }
 
   Future<void> deleteBacklog(
-      String docId,
-      ) async {
+    String docId,
+  ) async {
     await firestore
         .collection('backlogs')
         .doc(docId)
