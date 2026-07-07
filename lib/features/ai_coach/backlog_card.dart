@@ -46,6 +46,22 @@ class BacklogCard extends StatelessWidget {
     }
   }
 
+  IconData _getSubjectIcon(String sub) {
+    switch (sub.toLowerCase()) {
+      case 'physics':
+        return Icons.bolt_rounded;
+      case 'chemistry':
+        return Icons.science_rounded;
+      case 'mathematics':
+      case 'math':
+        return Icons.functions_rounded;
+      case 'biology':
+        return Icons.spa_rounded;
+      default:
+        return Icons.menu_book_rounded;
+    }
+  }
+
   Color _getPriorityColor(String prio) {
     switch (prio.toLowerCase()) {
       case 'high':
@@ -63,35 +79,45 @@ class BacklogCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final subColor = _getSubjectColor(subject);
     final prioColor = _getPriorityColor(priority);
+    final subIcon = _getSubjectIcon(subject);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xff0f172a).withOpacity(0.75),
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            completed 
+                ? Colors.green.withOpacity(0.06) 
+                : subColor.withOpacity(0.08),
+            const Color(0xff0b0f19).withOpacity(0.95),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: completed 
-              ? Colors.green.withOpacity(0.3) 
+              ? Colors.green.withOpacity(0.4) 
               : isToday 
-                  ? const Color(0xff6366f1).withOpacity(0.4)
-                  : Colors.white.withOpacity(0.08),
-          width: isToday && !completed ? 2.0 : 1.5,
+                  ? const Color(0xff6366f1).withOpacity(0.5)
+                  : Colors.white.withOpacity(0.06),
+          width: isToday && !completed ? 2.0 : 1.2,
         ),
         boxShadow: [
           BoxShadow(
             color: completed
-                ? Colors.green.withOpacity(0.03)
+                ? Colors.green.withOpacity(0.02)
                 : isToday
                     ? const Color(0xff6366f1).withOpacity(0.08)
-                    : prioColor.withOpacity(0.03),
-            blurRadius: 12,
+                    : subColor.withOpacity(0.02),
+            blurRadius: 16,
             spreadRadius: 1,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 6),
           )
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -103,7 +129,7 @@ class BacklogCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -111,36 +137,45 @@ class BacklogCard extends StatelessWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: subColor.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: subColor.withOpacity(0.3), width: 1),
+                              color: subColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: subColor.withOpacity(0.25), width: 1),
                             ),
-                            child: Text(
-                              subject,
-                              style: TextStyle(
-                                color: subColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(subIcon, color: subColor, size: 12),
+                                const SizedBox(width: 4),
+                                Text(
+                                  subject,
+                                  style: TextStyle(
+                                    color: subColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
                           // Priority Tag
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: prioColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
+                              color: prioColor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: prioColor.withOpacity(0.2), width: 1),
                             ),
                             child: Text(
                               priority.toUpperCase(),
                               style: TextStyle(
                                 color: prioColor,
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
                               ),
                             ),
                           ),
@@ -153,7 +188,7 @@ class BacklogCard extends StatelessWidget {
                               iconSize: 18,
                               icon: Icon(
                                 isToday ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                                color: isToday ? const Color(0xfff59e0b) : Colors.white30,
+                                color: isToday ? const Color(0xfff59e0b) : Colors.white24,
                               ),
                               onPressed: () => onTodayChanged(!isToday),
                               tooltip: isToday ? "Pinned to Today's Routine" : "Pin to Today's Routine",
@@ -163,21 +198,21 @@ class BacklogCard extends StatelessWidget {
                           // Time Duration Estimate
                           Row(
                             children: [
-                              const Icon(Icons.timer_outlined, color: Colors.white54, size: 13),
+                              const Icon(Icons.timer_outlined, color: Colors.white38, size: 13),
                               const SizedBox(width: 4),
                               Text(
                                 '${estimatedMinutes}m',
                                 style: const TextStyle(
-                                  color: Colors.white70,
+                                  color: Colors.white60,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       // Chapter Title & Checkbox Row
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,7 +228,7 @@ class BacklogCard extends StatelessWidget {
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                     decoration: completed ? TextDecoration.lineThrough : null,
-                                    decorationColor: Colors.white54,
+                                    decorationColor: Colors.white38,
                                   ),
                                 ),
                                 if (notes.isNotEmpty) ...[
@@ -201,9 +236,9 @@ class BacklogCard extends StatelessWidget {
                                   Text(
                                     notes,
                                     style: TextStyle(
-                                      color: Colors.grey.shade400,
-                                      fontSize: 13,
-                                      fontStyle: FontStyle.italic,
+                                      color: Colors.white.withOpacity(0.45),
+                                      fontSize: 12,
+                                      height: 1.35,
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -213,7 +248,7 @@ class BacklogCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // Custom Interactive Checkbox
+                          // Custom Interactive Checkbox with splash
                           GestureDetector(
                             onTap: () => onChanged(!completed),
                             child: AnimatedContainer(
@@ -223,10 +258,19 @@ class BacklogCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: completed ? Colors.green : Colors.transparent,
                                 border: Border.all(
-                                  color: completed ? Colors.green : Colors.white38,
+                                  color: completed ? Colors.green : Colors.white24,
                                   width: 2,
                                 ),
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: completed
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.green.withOpacity(0.2),
+                                          blurRadius: 8,
+                                          spreadRadius: 1,
+                                        )
+                                      ]
+                                    : null,
                               ),
                               child: completed
                                   ? const Icon(Icons.check, size: 16, color: Colors.black)
@@ -235,9 +279,9 @@ class BacklogCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       const Divider(color: Colors.white10, height: 1),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       // Actions row (Delete, Split with AI & Recover Timer Button)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -272,12 +316,12 @@ class BacklogCard extends StatelessWidget {
                           if (!completed)
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xff6366f1).withOpacity(0.15),
+                                backgroundColor: const Color(0xff6366f1).withOpacity(0.12),
                                 foregroundColor: const Color(0xff818cf8),
-                                side: BorderSide(color: const Color(0xff6366f1).withOpacity(0.3)),
+                                side: BorderSide(color: const Color(0xff6366f1).withOpacity(0.25)),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),

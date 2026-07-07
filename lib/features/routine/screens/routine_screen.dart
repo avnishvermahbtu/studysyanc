@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../controller/routine_controller.dart';
 import 'routine_model.dart';
 import '../../../core/services/tts_service.dart';
+import '../../../core/services/notification_service.dart';
 
 class RoutineScreen extends StatefulWidget {
   const RoutineScreen({super.key});
@@ -56,6 +57,9 @@ class _RoutineScreenState extends State<RoutineScreen> {
     _controller.addListener(_onControllerUpdate);
     TTSService().addListener(_onTtsStateChanged);
     _loadStudentName();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncAllUpcomingRoutines();
+    });
   }
 
   void _onTtsStateChanged(String? text, bool isSpeaking) {
@@ -65,28 +69,52 @@ class _RoutineScreenState extends State<RoutineScreen> {
   }
 
   Future<void> _loadStudentName() async {
-    final prefs = await SharedPreferences.getInstance();
-    final localName = prefs.getString('student_name');
-    if (localName != null && localName.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          _studentName = localName;
-        });
-      }
-    } else {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await user.reload();
-        final updatedUser = FirebaseAuth.instance.currentUser;
-        if (updatedUser?.displayName != null && updatedUser!.displayName!.isNotEmpty) {
-          if (mounted) {
-            setState(() {
-              _studentName = updatedUser.displayName!;
-            });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localName = prefs.getString('student_name');
+      if (localName != null && localName.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _studentName = localName;
+          });
+        }
+      } else {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await user.reload();
+          final updatedUser = FirebaseAuth.instance.currentUser;
+          if (updatedUser?.displayName != null && updatedUser!.displayName!.isNotEmpty) {
+            if (mounted) {
+              setState(() {
+                _studentName = updatedUser.displayName!;
+              });
+            }
+            await prefs.setString('student_name', updatedUser.displayName!);
           }
-          await prefs.setString('student_name', updatedUser.displayName!);
         }
       }
+    } catch (e) {
+      debugPrint("Error loading student name in RoutineScreen: $e");
+    }
+  }
+
+  Future<void> _syncAllUpcomingRoutines() async {
+    try {
+      final now = DateTime.now();
+      final startOfToday = DateTime(now.year, now.month, now.day);
+      
+      final querySnapshot = await firestore
+          .collection("routine")
+          .where("date", isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
+          .get();
+
+      final routines = querySnapshot.docs
+          .map((doc) => Routine.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .toList();
+
+      await NotificationService().syncUpcomingRoutines(routines);
+    } catch (e) {
+      debugPrint("Error syncing routine notifications: $e");
     }
   }
 
@@ -624,6 +652,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
                             Navigator.pop(context);
                             if (routine.id != null) {
                               firestore.collection("routine").doc(routine.id).delete();
+                              NotificationService().cancelRoutineNotification(routine.id!);
                             }
                           },
                         ).show();
@@ -921,7 +950,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
       _controller.selectedDate.day,
     );
 
-    await firestore.collection("routine").add({
+    final routineData = {
       "title": titleController.text.trim(),
       "location": locationController.text.trim(),
       "type": selectedType,
@@ -931,7 +960,13 @@ class _RoutineScreenState extends State<RoutineScreen> {
       "notes": "",
       "isCheckedIn": false,
       "createdAt": FieldValue.serverTimestamp(),
-    });
+    };
+
+    final docRef = await firestore.collection("routine").add(routineData);
+
+    // Schedule notification for the newly added routine
+    final routineObj = Routine.fromMap(routineData, docRef.id);
+    await NotificationService().scheduleRoutineNotification(routineObj);
   }
 
   // Stream-based schedule layout

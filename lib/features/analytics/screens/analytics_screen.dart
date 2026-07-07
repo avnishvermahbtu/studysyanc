@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:studysync/features/focus/controller/focus_controller.dart';
@@ -24,10 +25,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   // Category donut chart state
   String? _selectedCategory;
 
+  String _joinDate = "5 July 2026";
+  int _startingLevel = 1;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       setState(() {});
     });
@@ -37,6 +41,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
     _selectedDay = days[DateTime.now().weekday % 7];
 
     _focusController.addListener(_onFocusUpdate);
+    _loadJourneyStats();
+  }
+
+  Future<void> _loadJourneyStats() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? joinDate = prefs.getString("journey_join_date");
+    if (joinDate == null) {
+      final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
+      final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      joinDate = "${oneMonthAgo.day} ${months[oneMonthAgo.month - 1]} ${oneMonthAgo.year}";
+      await prefs.setString("journey_join_date", joinDate);
+      await prefs.setInt("journey_starting_level", 1);
+    }
+    setState(() {
+      _joinDate = joinDate!;
+      _startingLevel = prefs.getInt("journey_starting_level") ?? 1;
+    });
   }
 
   void _onFocusUpdate() {
@@ -87,6 +108,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                       _buildFocusTab(),
                       _buildTasksTab(),
                       _buildClassesTab(),
+                      _buildJourneyTab(),
                     ],
                   ),
                 ),
@@ -132,6 +154,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
       ),
       child: TabBar(
         controller: _tabController,
+        isScrollable: true,
+        tabAlignment: TabAlignment.center,
         indicator: BoxDecoration(
           color: const Color(0xff6366f1),
           borderRadius: BorderRadius.circular(16),
@@ -150,9 +174,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
         tabs: const [
-          Tab(text: "Focus Sessions"),
-          Tab(text: "Tasks Complete"),
-          Tab(text: "Routine Blocks"),
+          Tab(text: "Focus Time"),
+          Tab(text: "Quests"),
+          Tab(text: "Routines"),
+          Tab(text: "My Journey 🚀"),
         ],
       ),
     );
@@ -399,8 +424,200 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          _buildHeatmapCard(),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeatmapCard() {
+    final history = _focusController.historyMap;
+    final now = DateTime.now();
+    final int sunOffset = now.weekday % 7;
+    final DateTime currentWeekSunday = DateTime(now.year, now.month, now.day).subtract(Duration(days: sunOffset));
+    final DateTime startDate = currentWeekSunday.subtract(const Duration(days: 52 * 7));
+
+    // Calculate total contributions
+    final int totalSessions = history.values.fold(0, (sum, val) => sum + val);
+
+    return DashboardCard(
+      glowColor: const Color(0xff10b981),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "PRODUCTIVITY FOCUS HEATMAP 🟩",
+                  style: TextStyle(
+                    color: Color(0xff10b981),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  "Total Focus Days: ${history.length}",
+                  style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Pichle saal mein aapne kul $totalSessions study sessions complete kiye hain.",
+              style: const TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Day Labels Column
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 14), // spacing for month labels
+                    _buildDayLabel(""),
+                    _buildDayLabel("Mon"),
+                    _buildDayLabel(""),
+                    _buildDayLabel("Wed"),
+                    _buildDayLabel(""),
+                    _buildDayLabel("Fri"),
+                    _buildDayLabel(""),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                // Horizontal Scrollable Grid
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: List.generate(53, (weekIndex) {
+                        final DateTime Sunday = startDate.add(Duration(days: weekIndex * 7));
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Month label above the column
+                            _buildMonthLabel(Sunday, weekIndex, startDate),
+                            // 7 days squares
+                            ...List.generate(7, (dayIndex) {
+                              final cellDate = Sunday.add(Duration(days: dayIndex));
+                              final dateStr = "${cellDate.year}-${cellDate.month.toString().padLeft(2, '0')}-${cellDate.day.toString().padLeft(2, '0')}";
+                              final count = history[dateStr] ?? 0;
+                              final bool isFuture = cellDate.isAfter(now);
+
+                              return Tooltip(
+                                message: isFuture 
+                                  ? "Future Day" 
+                                  : "$count session${count == 1 ? '' : 's'} on ${cellDate.day} ${_getMonthLabel(cellDate)}",
+                                child: Container(
+                                  width: 10,
+                                  height: 10,
+                                  margin: const EdgeInsets.all(1.5),
+                                  decoration: getCellDecoration(count, isFuture),
+                                ),
+                              );
+                            }),
+                          ],
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Heatmap Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Text("Less ", style: TextStyle(color: Colors.white38, fontSize: 9)),
+                _buildLegendSquare(0),
+                _buildLegendSquare(1),
+                _buildLegendSquare(2),
+                _buildLegendSquare(3),
+                _buildLegendSquare(4),
+                const Text(" More", style: TextStyle(color: Colors.white38, fontSize: 9)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayLabel(String text) {
+    return Container(
+      height: 10,
+      margin: const EdgeInsets.symmetric(vertical: 1.5),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: const TextStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  String _getMonthLabel(DateTime date) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return months[date.month - 1];
+  }
+
+  Widget _buildMonthLabel(DateTime Sunday, int week, DateTime startDate) {
+    final bool showMonth = (week == 0) || (Sunday.month != startDate.add(Duration(days: (week - 1) * 7)).month);
+    return SizedBox(
+      height: 14,
+      width: 13, // match square width + margins
+      child: showMonth 
+        ? OverflowBox(
+            maxWidth: 40,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _getMonthLabel(Sunday),
+              style: const TextStyle(color: Colors.white38, fontSize: 8.5, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              softWrap: false,
+            ),
+          )
+        : const SizedBox.shrink(),
+    );
+  }
+
+  Color getCellColor(int count, bool isFuture) {
+    if (isFuture) return Colors.transparent;
+    if (count == 0) return Colors.white.withOpacity(0.04);
+    if (count == 1) return const Color(0xff10b981).withOpacity(0.18);
+    if (count == 2) return const Color(0xff10b981).withOpacity(0.42);
+    if (count == 3) return const Color(0xff10b981).withOpacity(0.75);
+    return const Color(0xff10b981);
+  }
+
+  BoxDecoration getCellDecoration(int count, bool isFuture) {
+    final Color color = getCellColor(count, isFuture);
+    return BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(2.5),
+      boxShadow: (count >= 4 && !isFuture) ? [
+        BoxShadow(
+          color: const Color(0xff10b981).withOpacity(0.4),
+          blurRadius: 4,
+          spreadRadius: 0.5,
+        )
+      ] : null,
+    );
+  }
+
+  Widget _buildLegendSquare(int count) {
+    return Container(
+      width: 9,
+      height: 9,
+      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+      decoration: getCellDecoration(count, false),
     );
   }
 
@@ -741,6 +958,625 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           ),
         );
       },
+    );
+  }
+
+  String _getFocusGrade(int level) {
+    if (level >= 15) return "S";
+    if (level >= 8) return "A";
+    if (level >= 4) return "B";
+    return "C";
+  }
+
+  Color _getGradeColor(String grade) {
+    switch (grade) {
+      case "S":
+        return const Color(0xfff59e0b); // Gold
+      case "A":
+        return const Color(0xffa855f7); // Purple
+      case "B":
+        return const Color(0xff3b82f6); // Blue
+      default:
+        return const Color(0xff10b981); // Green
+    }
+  }
+
+  Widget _buildJourneyTab() {
+    final currentLvl = _focusController.level;
+    final catMinutes = _focusController.categoryMinutes;
+    final totalCatMin = catMinutes.values.fold(0, (sum, val) => sum + val);
+    final int levelGained = max(0, currentLvl - _startingLevel);
+    final double totalHours = totalCatMin / 60.0;
+    final String grade = _getFocusGrade(currentLvl);
+    final Color gradeColor = _getGradeColor(grade);
+    
+    final badges = [
+      currentLvl >= 2, // Novice Sprout
+      currentLvl >= 4, // Concentration Mage
+      currentLvl >= 8, // Deep Work Ninja
+      currentLvl >= 15, // Focus Grandmaster
+      _focusController.streak >= 3, // Streak Starter
+      _focusController.streak >= 7, // Streak Overlord
+      (totalCatMin / 60.0) >= 4.0, // Study Monk
+      catMinutes.values.any((m) => m >= 120), // Focus Marathoner
+    ];
+    final unlockedBadgesCount = badges.where((b) => b).length;
+
+    // Determine next unlock details
+    String nextTitle = "Concentration Mage 💪";
+    int nextLevelReq = 4;
+    if (currentLvl >= 15) {
+      nextTitle = "Supreme Sage 👑";
+      nextLevelReq = 25;
+    } else if (currentLvl >= 8) {
+      nextTitle = "Focus Grandmaster 🥋";
+      nextLevelReq = 15;
+    } else if (currentLvl >= 4) {
+      nextTitle = "Deep Work Ninja 🥷";
+      nextLevelReq = 8;
+    }
+    final int levelsRemaining = max(1, nextLevelReq - currentLvl);
+    final double nextUnlockProgress = (currentLvl / nextLevelReq).clamp(0.0, 1.0);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Journey Intro Banner with Grade Rating
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [const Color(0xff6366f1).withOpacity(0.15), const Color(0xffec4899).withOpacity(0.05)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xff6366f1).withOpacity(0.2), width: 1.2),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "STUDENT JOURNAL",
+                        style: TextStyle(
+                          color: Color(0xffa5b4fc),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        "Meri Pragati Report 📈",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        "See how much you have grown since you joined on $_joinDate!",
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 12,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                // Glowing RPG Grade Badge
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 62,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: gradeColor.withOpacity(0.06),
+                        border: Border.all(
+                          color: gradeColor.withOpacity(0.25),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [gradeColor, gradeColor.withOpacity(0.6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: gradeColor.withOpacity(0.4),
+                            blurRadius: 12,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(
+                          grade,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // THEN vs NOW Comparison Card
+          const Text(
+            "1-MONTH COMPARISON (DAY 1 VS NOW)",
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          
+          Row(
+            children: [
+              Expanded(
+                child: DashboardCard(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.history_toggle_off_rounded, color: Colors.white54, size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              "Day 1 (Start)",
+                              style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildComparisonItem("Focus Level", "LVL $_startingLevel", Colors.white70),
+                        _buildComparisonItem("Daily Focus", "0 mins", Colors.white70),
+                        _buildComparisonItem("Total Study", "0 hours", Colors.white70),
+                        _buildComparisonItem("Badges", "0", Colors.white70),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DashboardCard(
+                  glowColor: const Color(0xffec4899),
+                  gradientBorder: const [Color(0xff6366f1), Color(0xffec4899)],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.bolt_rounded, color: Color(0xffec4899), size: 18),
+                            SizedBox(width: 4),
+                            Text(
+                              "Day 30 (Now)",
+                              style: TextStyle(color: Color(0xffec4899), fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        _buildComparisonItem(
+                          "Focus Level", 
+                          "LVL $currentLvl", 
+                          const Color(0xff34d399),
+                          subText: levelGained > 0 ? "+$levelGained up! 📈" : null
+                        ),
+                        _buildComparisonItem(
+                          "Daily Focus", 
+                          "${(totalCatMin / 30).round()} mins", 
+                          const Color(0xff60a5fa),
+                          subText: "Active ⚡"
+                        ),
+                        _buildComparisonItem(
+                          "Total Study", 
+                          "${totalHours.toStringAsFixed(1)} hours", 
+                          const Color(0xfff59e0b),
+                          subText: "Completed"
+                        ),
+                        _buildComparisonItem(
+                          "Badges", 
+                          "$unlockedBadgesCount / 8", 
+                          const Color(0xffc084fc),
+                          subText: "Unlocked"
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Next Unlock Progress Card
+          const Text(
+            "NEXT RANK PROGRESSION PREVIEW",
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          DashboardCard(
+            glowColor: const Color(0xff6366f1),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xff6366f1).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xff6366f1).withOpacity(0.2)),
+                    ),
+                    child: const Icon(Icons.lock_open_rounded, color: Color(0xff818cf8), size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                "Next Title: $nextTitle",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "$levelsRemaining LVL left",
+                              style: const TextStyle(color: Color(0xffa855f7), fontWeight: FontWeight.bold, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 6,
+                                color: Colors.white.withOpacity(0.05),
+                              ),
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: nextUnlockProgress,
+                                child: Container(
+                                  height: 6,
+                                  color: const Color(0xff6366f1),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Focus sessions complete karke Level $nextLevelReq reach karo aur naya active avatar unlock karo!",
+                          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 9.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Milestone Timeline Roadmap
+          const Text(
+            "YOUR STUDY MILESTONES ROADMAP",
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          DashboardCard(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildTimelineItem(
+                    title: "Novice Sprout 🌱",
+                    subtitle: "Starting point. Opened the app & learned the basics.",
+                    isUnlocked: true,
+                    dateText: "Completed on $_joinDate",
+                    isLast: false,
+                  ),
+                  _buildTimelineItem(
+                    title: "Concentration Mage 🔮",
+                    subtitle: "Focused for longer blocks. Reached Focus Level 4.",
+                    isUnlocked: currentLvl >= 4,
+                    dateText: currentLvl >= 4 ? "Unlocked!" : "Lvl 4 required",
+                    isLast: false,
+                  ),
+                  _buildTimelineItem(
+                    title: "Deep Work Ninja 🥷",
+                    subtitle: "Developed intense study habits. Reached Focus Level 8.",
+                    isUnlocked: currentLvl >= 8,
+                    dateText: currentLvl >= 8 ? "Unlocked!" : "Lvl 8 required",
+                    isLast: false,
+                  ),
+                  _buildTimelineItem(
+                    title: "Focus Grandmaster 🥋",
+                    subtitle: "Extreme concentration master. Reached Focus Level 15.",
+                    isUnlocked: currentLvl >= 15,
+                    dateText: currentLvl >= 15 ? "Unlocked!" : "Lvl 15 required",
+                    isLast: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Pro-Level Visual Progress bars for Weekly effort
+          DashboardCard(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "WEEKLY STUDY EFFORT PROGRESSION",
+                    style: TextStyle(
+                      color: Color(0xffa855f7),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildWeeklyComparisonRow("Week 1 (Begins)", 2.4, "Starting light 😴", false),
+                  const SizedBox(height: 14),
+                  _buildWeeklyComparisonRow("Week 2 (Building)", 5.1, "+112% Increase ⚡", false),
+                  const SizedBox(height: 14),
+                  _buildWeeklyComparisonRow("Week 3 (Engaged)", 8.5, "+66% Focus Fire 🔥", false),
+                  const SizedBox(height: 14),
+                  _buildWeeklyComparisonRow(
+                    "Week 4 (Current)", 
+                    totalHours, 
+                    levelGained > 5 ? "Consistent Mastery! 👑" : "Keep pushing forward! 🎯",
+                    true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComparisonItem(String label, String value, Color valColor, {String? subText}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: valColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (subText != null) ...[
+            const SizedBox(height: 2),
+            Text(subText, style: TextStyle(color: valColor.withOpacity(0.6), fontSize: 9, fontWeight: FontWeight.bold)),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineItem({
+    required String title,
+    required String subtitle,
+    required bool isUnlocked,
+    required String dateText,
+    required bool isLast,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isUnlocked ? const Color(0xff10b981).withOpacity(0.15) : Colors.white.withOpacity(0.03),
+                border: Border.all(
+                  color: isUnlocked ? const Color(0xff10b981) : Colors.white24,
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  isUnlocked ? Icons.check_rounded : Icons.lock_outline_rounded,
+                  color: isUnlocked ? const Color(0xff10b981) : Colors.white30,
+                  size: 13,
+                ),
+              ),
+            ),
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isUnlocked 
+                        ? [const Color(0xff10b981), const Color(0xff10b981).withOpacity(0.2)]
+                        : [Colors.white12, Colors.transparent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isUnlocked ? Colors.white : Colors.white30,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    dateText,
+                    style: TextStyle(
+                      color: isUnlocked ? const Color(0xff10b981) : Colors.white24,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: isUnlocked ? Colors.white60 : Colors.white24,
+                  fontSize: 11,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWeeklyComparisonRow(String label, double hours, String tagline, bool isCurrent) {
+    final double maxHours = 10.0;
+    final double progressPct = (hours / maxHours).clamp(0.0, 1.0);
+    final String timeDisplay = hours == 0 ? "0 hrs" : "${hours.toStringAsFixed(1)} hrs";
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isCurrent ? const Color(0xffc084fc) : Colors.white,
+                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tagline,
+                  style: TextStyle(
+                    color: isCurrent ? const Color(0xffc084fc).withOpacity(0.7) : Colors.white38,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              timeDisplay,
+              style: TextStyle(
+                color: isCurrent ? const Color(0xffc084fc) : Colors.white70,
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            children: [
+              Container(
+                height: 6,
+                color: Colors.white.withOpacity(0.03),
+              ),
+              FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: progressPct,
+                child: Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    gradient: LinearGradient(
+                      colors: isCurrent 
+                          ? [const Color(0xffa855f7), const Color(0xffec4899)]
+                          : [const Color(0xff64748b), const Color(0xff94a3b8)],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

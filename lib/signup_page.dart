@@ -20,6 +20,7 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -77,6 +78,17 @@ class _SignupPageState extends State<SignupPage> {
     if (email.isEmpty || password.isEmpty) {
       _showAlert("Alert!", "Please enter required fields (Email & Password)");
       return;
+    }
+
+    if (password.length < 8) {
+      setState(() {
+        _passwordError = "Password must be at least 8 characters";
+      });
+      return;
+    } else {
+      setState(() {
+        _passwordError = null;
+      });
     }
 
     try {
@@ -257,9 +269,18 @@ class _SignupPageState extends State<SignupPage> {
                               controller: passwordController,
                               obscureText: hidePassword,
                               style: const TextStyle(color: Colors.white, fontSize: 15),
+                              onChanged: (val) {
+                                if (_passwordError != null && val.trim().length >= 8) {
+                                  setState(() {
+                                    _passwordError = null;
+                                  });
+                                }
+                              },
                               decoration: InputDecoration(
                                 labelText: "Password",
                                 labelStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                                errorText: _passwordError,
+                                errorStyle: const TextStyle(color: Colors.redAccent),
                                 prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.white54, size: 20),
                                 suffixIcon: IconButton(
                                   icon: Icon(hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: Colors.white38, size: 20),
@@ -267,6 +288,8 @@ class _SignupPageState extends State<SignupPage> {
                                 ),
                                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.white10)),
                                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xff10b981))),
+                                errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent)),
+                                focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent)),
                               ),
                             ),
                             const SizedBox(height: 28),

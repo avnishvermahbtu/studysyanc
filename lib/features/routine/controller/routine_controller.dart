@@ -65,30 +65,32 @@ class RoutineController extends ChangeNotifier {
     return "Today: $loadedText. Complete attendance to gain study XP! ⚡";
   }
 
-  // Parse string like "09:30 AM" or "14:15" to DateTime on selected day
+  // Parse string like "09:30 AM", "9:30AM", "14:15", or "14.15" to DateTime on selected day
   DateTime? parseTimeString(String timeStr, DateTime baseDate) {
     try {
       final clean = timeStr.trim().toUpperCase();
-      int hour = 0;
-      int minute = 0;
+      
+      // Match hour and minute: e.g. "10:57", "9.30", "09:30"
+      final timeRegex = RegExp(r'(\d{1,2})[\s.:](\d{2})');
+      final match = timeRegex.firstMatch(clean);
+      if (match == null) {
+        debugPrint("WARNING: Time regex did not match string: '$timeStr'");
+        return null;
+      }
 
-      if (clean.contains("AM") || clean.contains("PM")) {
-        // 12-hour format e.g., "09:30 AM"
-        final parts = clean.split(RegExp(r'\s+'));
-        final hm = parts[0].split(":");
-        hour = int.parse(hm[0]);
-        minute = int.parse(hm[1]);
-        final isPm = parts.length > 1 && parts[1] == "PM";
+      int hour = int.parse(match.group(1)!);
+      int minute = int.parse(match.group(2)!);
+
+      final isPm = clean.contains("PM");
+      final isAm = clean.contains("AM");
+
+      if (isPm || isAm) {
         if (isPm && hour < 12) hour += 12;
         if (!isPm && hour == 12) hour = 0;
-      } else {
-        // 24-hour format e.g., "14:30"
-        final hm = clean.split(":");
-        hour = int.parse(hm[0]);
-        minute = int.parse(hm[1]);
       }
       return DateTime(baseDate.year, baseDate.month, baseDate.day, hour, minute);
     } catch (e) {
+      debugPrint("Error parsing time string '$timeStr': $e");
       return null;
     }
   }

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:studysync/core/theme/theme_manager.dart';
 
 class GradientBorderPainter extends CustomPainter {
   final double width;
@@ -87,32 +88,44 @@ class _DashboardCardState extends State<DashboardCard>
   Widget build(BuildContext context) {
     Widget card = Container(
       decoration: BoxDecoration(
-        color: widget.isGlass
-            ? Colors.white.withOpacity(widget.bgOpacity)
-            : Colors.white.withOpacity(widget.bgOpacity + 0.01),
+        color: ThemeManager.isLight 
+            ? Colors.white 
+            : (widget.isGlass
+                ? Colors.white.withOpacity(widget.bgOpacity)
+                : Colors.white.withOpacity(widget.bgOpacity + 0.01)),
         borderRadius: BorderRadius.circular(widget.borderRadius),
         border: widget.gradientBorder != null
             ? null
             : Border.all(
-                color: Colors.white.withOpacity(widget.borderOpacity),
+                color: ThemeManager.isLight 
+                    ? Colors.black.withOpacity(0.08) 
+                    : Colors.white.withOpacity(widget.borderOpacity),
                 width: 1,
               ),
-        boxShadow: widget.glowColor != null
+        boxShadow: ThemeManager.isLight 
             ? [
                 BoxShadow(
-                  color: widget.glowColor!.withOpacity(0.14),
-                  blurRadius: 20,
-                  spreadRadius: -4,
-                  offset: const Offset(0, 6),
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                if (widget.isGlass)
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 12,
-                    spreadRadius: 2,
-                  ),
               ]
-            : null,
+            : (widget.glowColor != null
+                ? [
+                    BoxShadow(
+                      color: widget.glowColor!.withOpacity(0.14),
+                      blurRadius: 20,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 6),
+                    ),
+                    if (widget.isGlass)
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                  ]
+                : null),
       ),
       child: widget.isGlass
           ? ClipRRect(

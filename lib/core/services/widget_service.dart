@@ -26,6 +26,7 @@ class WidgetService {
       await _channel.invokeMethod('updateWidgetData', {
         'streak': streak,
         'activeTasksCount': activeTasksCount,
+        'isTimerRunning': focusController.isRunning,
       });
     } on PlatformException catch (_) {
       // safe fallback for unsupported platforms or configurations

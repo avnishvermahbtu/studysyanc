@@ -1091,10 +1091,12 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
     // 2. Setup Agora RtcEngine
     // Note: Fetches Agora App ID dynamically from Firestore to allow customization.
     String agoraAppId = "";
+    String agoraToken = "";
     try {
       final doc = await _db.collection('settings').doc('agora').get();
       if (doc.exists) {
         agoraAppId = doc.data()?['appId'] ?? "";
+        agoraToken = doc.data()?['token'] ?? "";
       }
     } catch (e) {
       debugPrint("Error fetching Agora App ID from Firestore: $e");
@@ -1105,6 +1107,16 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
       setState(() {
         _useSimulatedAudio = true;
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Agora App ID is missing. Live voice call features will be simulated. Please configure settings/agora in Firestore."),
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
+        }
+      });
       return;
     }
 
@@ -1114,6 +1126,9 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
         appId: agoraAppId,
         channelProfile: ChannelProfileType.channelProfileCommunication,
       ));
+
+      // Route audio to speakerphone by default (like Google Meet / Zoom)
+      await _engine!.setEnableSpeakerphone(true);
 
       _engine!.registerEventHandler(RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
@@ -1140,7 +1155,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
 
       await _engine!.enableAudio();
       await _engine!.joinChannel(
-        token: "", // Temporary tokens are disabled in Testing console
+        token: agoraToken,
         channelId: widget.roomId,
         uid: 0,
         options: const ChannelMediaOptions(

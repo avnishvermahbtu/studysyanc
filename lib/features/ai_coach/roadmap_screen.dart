@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:confetti/confetti.dart';
 import '../tasks/screens/ai_service.dart';
 import 'roadmap_model.dart';
 import '../dashboard/widgets/offline_banner.dart';
@@ -44,9 +45,12 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     "Polishing study timeline... ⚡",
   ];
 
+  late ConfettiController _confettiController;
+
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
     _loadRoadmapData();
   }
 
@@ -55,6 +59,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     _topicController.dispose();
     _timelineController.dispose();
     _loadingTimer?.cancel();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -113,6 +118,27 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       }
     });
     await prefs.setStringList("completed_tasks_${_activeRoadmap!.title}", _completedTasks.toList());
+
+    // Celebrate entire roadmap completion
+    final totalTasksCount = _activeRoadmap!.milestones.fold<int>(0, (prev, element) => prev + element.tasks.length);
+    final completedCount = _completedTasks.length;
+    if (completedCount == totalTasksCount && totalTasksCount > 0) {
+      _confettiController.play();
+      HapticFeedback.heavyImpact();
+      if (mounted) {
+        AwesomeDialog(
+          context: context,
+          dialogType: DialogType.success,
+          animType: AnimType.scale,
+          dialogBackgroundColor: const Color(0xff0f172a),
+          dialogBorderRadius: BorderRadius.circular(20),
+          title: 'Roadmap Conquered! 🏆',
+          desc: 'Incredible dedication! You have successfully completed all checkpoints on your study roadmap.',
+          btnOkOnPress: () {},
+          btnOkColor: const Color(0xff6366f1),
+        ).show();
+      }
+    }
   }
 
   Future<void> _checkInternetConnection() async {
@@ -202,21 +228,34 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       }
 
       final newRoadmap = Roadmap.fromJson(jsonResponse);
+
+      // Generate a unique title if a roadmap with the same title already exists
+      String uniqueTitle = newRoadmap.title;
+      int counter = 1;
+      while (_savedRoadmaps.any((r) => r.title.toLowerCase() == uniqueTitle.toLowerCase())) {
+        counter++;
+        uniqueTitle = "${newRoadmap.title} ($counter)";
+      }
+
+      final uniqueRoadmap = Roadmap(
+        title: uniqueTitle,
+        description: newRoadmap.description,
+        milestones: newRoadmap.milestones,
+      );
+
       final prefs = await SharedPreferences.getInstance();
-      
       List<Roadmap> updatedRoadmaps = List.from(_savedRoadmaps);
-      updatedRoadmaps.removeWhere((r) => r.title.toLowerCase() == newRoadmap.title.toLowerCase());
-      updatedRoadmaps.insert(0, newRoadmap);
+      updatedRoadmaps.insert(0, uniqueRoadmap);
 
       final jsonList = updatedRoadmaps.map((r) => r.toJson()).toList();
       await prefs.setStringList("saved_roadmaps", jsonList);
       
-      await prefs.setString("active_roadmap_title", newRoadmap.title);
-      await prefs.remove("completed_tasks_${newRoadmap.title}");
+      await prefs.setString("active_roadmap_title", uniqueRoadmap.title);
+      await prefs.remove("completed_tasks_${uniqueRoadmap.title}");
 
       setState(() {
         _savedRoadmaps = updatedRoadmaps;
-        _activeRoadmap = newRoadmap;
+        _activeRoadmap = uniqueRoadmap;
         _completedTasks.clear();
         _isLoading = false;
         _showForm = false;
@@ -230,7 +269,12 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to generate roadmap. Please check your connection and try again.")),
+        SnackBar(
+          content: Text("Failed to generate roadmap: ${e.toString()}"),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     }
   }
@@ -303,60 +347,74 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double maxTitleWidth = MediaQuery.of(context).size.width - (_showForm ? 100 : 180);
+
     return Scaffold(
       backgroundColor: const Color(0xff020617),
       appBar: AppBar(
         title: _savedRoadmaps.length > 1 && !_showForm
-            ? PopupMenuButton<Roadmap>(
-                color: const Color(0xff0d0e15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Colors.white10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _activeRoadmap!.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70),
-                  ],
-                ),
-                onSelected: (Roadmap selected) async {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString("active_roadmap_title", selected.title);
-                  final completed = Set<String>.from(
-                    prefs.getStringList("completed_tasks_${selected.title}") ?? [],
-                  );
-                  setState(() {
-                    _activeRoadmap = selected;
-                    _completedTasks = completed;
-                  });
-                },
-                itemBuilder: (context) {
-                  return _savedRoadmaps.map((r) {
-                    final isCurrent = r.title == _activeRoadmap!.title;
-                    return PopupMenuItem<Roadmap>(
-                      value: r,
-                      child: Text(
-                        r.title,
-                        style: TextStyle(
-                          color: isCurrent ? const Color(0xff6366f1) : Colors.white,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+            ? ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxTitleWidth),
+                child: PopupMenuButton<Roadmap>(
+                  color: const Color(0xff0d0e15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: const BorderSide(color: Colors.white10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _activeRoadmap!.title,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                       ),
+                      const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70),
+                    ],
+                  ),
+                  onSelected: (Roadmap selected) async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString("active_roadmap_title", selected.title);
+                    final completed = Set<String>.from(
+                      prefs.getStringList("completed_tasks_${selected.title}") ?? [],
                     );
-                  }).toList();
-                },
+                    setState(() {
+                      _activeRoadmap = selected;
+                      _completedTasks = completed;
+                    });
+                  },
+                  itemBuilder: (context) {
+                    return _savedRoadmaps.map((r) {
+                      final isCurrent = r.title == _activeRoadmap!.title;
+                      return PopupMenuItem<Roadmap>(
+                        value: r,
+                        child: Text(
+                          r.title,
+                          style: TextStyle(
+                            color: isCurrent ? const Color(0xff6366f1) : Colors.white,
+                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
               )
-            : Text(
-                _showForm ? "Generate Roadmap" : (_activeRoadmap?.title ?? "AI Study Roadmap"),
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            : ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxTitleWidth),
+                child: Text(
+                  _showForm ? "Generate Roadmap" : (_activeRoadmap?.title ?? "AI Study Roadmap"),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
               ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
@@ -416,6 +474,15 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                 : (_showForm || _activeRoadmap == null)
                     ? _buildGenerationForm()
                     : _buildRoadmapTimeline(),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+            ),
           ),
         ],
       ),
@@ -668,6 +735,16 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
               final ms = roadmap.milestones[mIdx];
               final isLast = mIdx == roadmap.milestones.length - 1;
 
+              // Calculate milestone completion details
+              final totalMsTasks = ms.tasks.length;
+              int completedMsTasks = 0;
+              for (int i = 0; i < totalMsTasks; i++) {
+                final taskId = "${roadmap.title}_${mIdx}_$i";
+                if (_completedTasks.contains(taskId)) completedMsTasks++;
+              }
+              final bool isMilestoneComplete = totalMsTasks > 0 && completedMsTasks == totalMsTasks;
+              final bool isMilestoneStarted = completedMsTasks > 0;
+
               return IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -675,23 +752,43 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                     // Visual timeline vertical line and point track
                     Column(
                       children: [
-                        Container(
-                          width: 22,
-                          height: 22,
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 350),
+                          width: 26,
+                          height: 26,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: const Color(0xff020617),
-                            border: Border.all(color: const Color(0xff6366f1), width: 4),
+                            color: isMilestoneComplete ? const Color(0xff10b981) : const Color(0xff020617),
+                            border: Border.all(
+                              color: isMilestoneComplete
+                                  ? const Color(0xff10b981)
+                                  : (isMilestoneStarted ? const Color(0xff6366f1) : Colors.white24),
+                              width: isMilestoneComplete ? 2 : 4,
+                            ),
                             boxShadow: [
-                              BoxShadow(color: const Color(0xff6366f1).withOpacity(0.4), blurRadius: 6, spreadRadius: 1)
+                              if (isMilestoneComplete)
+                                BoxShadow(color: const Color(0xff10b981).withOpacity(0.35), blurRadius: 8, spreadRadius: 1)
+                              else if (isMilestoneStarted)
+                                BoxShadow(color: const Color(0xff6366f1).withOpacity(0.35), blurRadius: 6, spreadRadius: 1)
                             ],
                           ),
+                          child: isMilestoneComplete
+                              ? const Icon(Icons.check_rounded, color: Colors.black, size: 15)
+                              : (isMilestoneStarted
+                                  ? const Center(child: CircleAvatar(radius: 4, backgroundColor: Color(0xff6366f1)))
+                                  : const SizedBox.shrink()),
                         ),
                         if (!isLast)
                           Expanded(
-                            child: Container(
-                              width: 3,
-                              color: Colors.white.withOpacity(0.08),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 350),
+                              width: 3.5,
+                              decoration: BoxDecoration(
+                                color: isMilestoneComplete
+                                    ? const Color(0xff10b981)
+                                    : (isMilestoneStarted ? const Color(0xff6366f1).withOpacity(0.5) : Colors.white.withOpacity(0.08)),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                       ],
@@ -707,12 +804,54 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                           children: [
                             Text(
                               ms.dayOrWeek.toUpperCase(),
-                              style: TextStyle(color: const Color(0xff6366f1).withOpacity(0.8), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8),
+                              style: TextStyle(
+                                color: isMilestoneComplete
+                                    ? const Color(0xff10b981)
+                                    : const Color(0xff6366f1).withOpacity(0.8),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                              ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              ms.title,
-                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            const SizedBox(height: 4),
+                            
+                            // Milestone Card Title & Progress Badge
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    ms.title,
+                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (totalMsTasks > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: isMilestoneComplete
+                                          ? const Color(0xff10b981).withOpacity(0.12)
+                                          : (isMilestoneStarted ? const Color(0xff6366f1).withOpacity(0.12) : Colors.white.withOpacity(0.04)),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isMilestoneComplete
+                                            ? const Color(0xff10b981).withOpacity(0.3)
+                                            : (isMilestoneStarted ? const Color(0xff6366f1).withOpacity(0.3) : Colors.white10),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      "$completedMsTasks/$totalMsTasks Tasks",
+                                      style: TextStyle(
+                                        color: isMilestoneComplete
+                                            ? const Color(0xff10b981)
+                                            : (isMilestoneStarted ? const Color(0xffa5b4fc) : Colors.white38),
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                             const SizedBox(height: 12),
 
@@ -725,8 +864,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                               return Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4),
                                 child: _buildGlassCard(
-                                  opacity: isDone ? 0.02 : 0.04,
-                                  borderColor: isDone ? Colors.white.withOpacity(0.04) : Colors.white10,
+                                  opacity: isDone ? 0.015 : 0.04,
+                                  borderColor: isDone ? Colors.white.withOpacity(0.02) : Colors.white10,
                                   child: InkWell(
                                     onTap: () => _toggleTask(taskId),
                                     borderRadius: BorderRadius.circular(24),

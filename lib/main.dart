@@ -9,6 +9,8 @@ import 'package:studysync/features/routine/screens/routine_screen.dart';
 import 'package:studysync/login_page.dart';
 import 'package:studysync/firebase_options.dart';
 import 'package:studysync/features/group_study/screens/auto_join_screen.dart';
+import 'package:studysync/core/theme/theme_manager.dart';
+import 'package:studysync/core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,24 +19,50 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // Initialize theme manager configuration
+  await ThemeManager.init();
+
   // Explicitly enable offline support & local caching for Firestore
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-  );
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
+  } catch (e) {
+    debugPrint("Failed to set Firestore settings: $e");
+  }
 
   runApp(MyApp());
+
+  // Initialize notifications in the background after first frame to prevent black startup screen
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    NotificationService().init();
+  });
 }
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Firebase App',
-      home: FirebaseAuth.instance.currentUser == null
-          ? const LoginPage()
-          : const MainNavigationScreen(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: ThemeManager.isLightNotifier,
+      builder: (context, isLight, _) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Firebase App',
+          themeMode: ThemeMode.dark,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            scaffoldBackgroundColor: const Color(0xfff1f5f9),
+            primaryColor: const Color(0xff6366f1),
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xff020617),
+            primaryColor: const Color(0xff6366f1),
+          ),
+          home: FirebaseAuth.instance.currentUser == null
+              ? const LoginPage()
+              : const MainNavigationScreen(),
       onGenerateRoute: (settings) {
         final uri = Uri.parse(settings.name ?? '');
         if (uri.path.startsWith('/join')) {
@@ -54,6 +82,8 @@ class MyApp extends StatelessWidget {
         return null;
       },
     );
+  },
+);
   }
 }
 

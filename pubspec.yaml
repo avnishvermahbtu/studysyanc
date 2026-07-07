@@ -60,6 +60,10 @@ dependencies:
   agora_rtc_engine: ^6.3.0
   permission_handler: ^11.3.0
   share_plus: ^10.1.0
+  flutter_timezone: ^5.1.0
+  wakelock_plus: ^1.2.8
+  speech_to_text: ^7.3.0
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:

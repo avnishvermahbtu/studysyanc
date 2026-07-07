@@ -4,19 +4,33 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../controller/focus_controller.dart';
 import '../../../core/services/tts_service.dart';
+import '../../../core/services/dnd_service.dart';
+import '../../ai_coach/leaderboard_screen.dart';
+import '../../../core/services/ambient_sound_service.dart';
 
 class FocusScreen extends StatefulWidget {
-  const FocusScreen({super.key});
+  final bool isActive;
+  const FocusScreen({super.key, this.isActive = true});
 
   @override
   State<FocusScreen> createState() => _FocusScreenState();
 }
 
-class _FocusScreenState extends State<FocusScreen> {
+class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, TickerProviderStateMixin {
   late FocusController _controller;
   late ConfettiController _confettiController;
+  String _selectedTreeType = "cherry_blossom";
+  bool _isTreeDead = false;
+  double _lofiVol = 0.60;
+  double _rainVol = 0.0;
+  double _campfireVol = 0.0;
+  bool _isDeepFocusMode = false;
+  bool _autoDndEnabled = false;
+  late AnimationController _breathingController;
   final List<String> _motivationalQuotes = [
     "Study now, be proud later. Your dream is worth it.",
     "Focus is the art of saying 'No' to distractions. 🧠",
@@ -32,6 +46,11 @@ class _FocusScreenState extends State<FocusScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _breathingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
     _controller = FocusController();
     
     // Add listener to update UI on controller state changes
@@ -54,10 +73,99 @@ class _FocusScreenState extends State<FocusScreen> {
         });
       }
     });
+    _loadDndPreference();
+    _checkWidgetAction();
+  }
+
+  void _loadDndPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _autoDndEnabled = prefs.getBool("auto_dnd_enabled") ?? false;
+      });
+    }
+  }
+
+  void _showDndExplanationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff0b0f19),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.notifications_off_rounded, color: Colors.indigoAccent),
+              SizedBox(width: 10),
+              Text("Silent Mode Permission 🤫", style: TextStyle(color: Colors.white, fontSize: 18)),
+            ],
+          ),
+          content: const Text(
+            "StudySync aapke study timer chalne ke dauran WhatsApp/Instagram ke distracting text alerts ko mute kar dega, par important phone calls aati rahengi! \n\nIske liye next screen par StudySync ko 'Do Not Disturb' settings allow kijiye.",
+            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.white30)),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await DNDService.requestPermission();
+              },
+              child: const Text("Allow", style: TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static const _widgetChannel = MethodChannel('com.example.studysync/widget');
+
+  Future<void> _checkWidgetAction() async {
+    try {
+      final String? action = await _widgetChannel.invokeMethod<String>('getPendingAction');
+      if (action == 'toggle_timer') {
+        _controller.toggleTimerState();
+      }
+    } catch (e) {
+      debugPrint("Error checking widget action: $e");
+    }
+  }
+
+  void _syncAmbientSounds() {
+    if (_controller.isSoundscapeActive && _controller.isRunning) {
+      if (_lofiVol > 0) {
+        AmbientSoundService().playTrack("lofi", _lofiVol);
+      } else {
+        AmbientSoundService().stopTrack("lofi");
+      }
+      if (_rainVol > 0) {
+        AmbientSoundService().playTrack("rain", _rainVol);
+      } else {
+        AmbientSoundService().stopTrack("rain");
+      }
+      if (_campfireVol > 0) {
+        AmbientSoundService().playTrack("campfire", _campfireVol);
+      } else {
+        AmbientSoundService().stopTrack("campfire");
+      }
+    } else {
+      AmbientSoundService().stopAll();
+    }
   }
 
   void _onControllerUpdate() {
     if (mounted) {
+      _syncAmbientSounds();
+      if (_controller.isRunning) {
+        WakelockPlus.enable();
+      } else {
+        WakelockPlus.disable();
+      }
       setState(() {});
     }
   }
@@ -111,16 +219,28 @@ class _FocusScreenState extends State<FocusScreen> {
     _confettiController.play();
     HapticFeedback.vibrate();
     
+    // Save successfully grown tree
+    _saveGrownTreeToGarden();
+    WakelockPlus.disable();
+    if (_autoDndEnabled) {
+      DNDService.setDND(false);
+    }
+    
+    final focusMinutes = _controller.lastCompletedFocusMinutes;
+    final earnedXp = focusMinutes * 2;
+    final isStreakSaved = focusMinutes >= 15;
+    final String streakSuffix = isStreakSaved ? " and Streak Saved!" : "";
+
     // Show a session complete dialog/snack
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(
+        content: Row(
           children: [
-            Text("🔥 ", style: TextStyle(fontSize: 24)),
+            const Text("🔥 ", style: TextStyle(fontSize: 24)),
             Expanded(
               child: Text(
-                "Study Block Completed! +50 XP and Streak Saved!",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                "Study Block Completed! +$earnedXp XP$streakSuffix",
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -134,8 +254,66 @@ class _FocusScreenState extends State<FocusScreen> {
     );
   }
 
+  void _saveGrownTreeToGarden() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> gardenList = prefs.getStringList("focus_garden_trees") ?? [];
+    final now = DateTime.now();
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    final dateStr = "${months[now.month - 1]} ${now.day}";
+    final durationMins = _controller.lastCompletedFocusMinutes;
+    
+    gardenList.add("$_selectedTreeType|$dateStr|$durationMins");
+    await prefs.setStringList("focus_garden_trees", gardenList);
+  }
+
+  void _confirmCancelSession(VoidCallback onConfirmed) {
+    if (_controller.isRunning && !_controller.isBreak) {
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xff0b0f19),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent),
+                SizedBox(width: 10),
+                Text("Tree Danger! 🥀", style: TextStyle(color: Colors.white)),
+              ],
+            ),
+            content: const Text(
+              "Agar aapne abhi timer cancel kiya, toh aapka pyara tree murjha (die) jayega! Kya aap sach mein cancel karna chahte hain?",
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Nahi, Focus Karein", style: TextStyle(color: Colors.greenAccent)),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  onConfirmed();
+                },
+                child: const Text("Haan, Tree Hatayein", style: TextStyle(color: Colors.redAccent)),
+              ),
+            ],
+          );
+        },
+      );
+    } else {
+      onConfirmed();
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _breathingController.dispose();
+    WakelockPlus.disable();
+    if (_autoDndEnabled) {
+      DNDService.setDND(false);
+    }
     _quoteTimer?.cancel();
     _controller.removeListener(_onControllerUpdate);
     TTSService().removeListener(_onTtsStateChanged);
@@ -147,7 +325,75 @@ class _FocusScreenState extends State<FocusScreen> {
       _controller.onSessionCompleted = null;
     }
     _confettiController.dispose();
+    AmbientSoundService().stopAll();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkWidgetAction();
+    }
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_controller.isRunning && !_controller.isBreak) {
+        _handleOutOfScreenPenalty();
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(FocusScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive && !widget.isActive) {
+      if (_controller.isRunning && !_controller.isBreak) {
+        _handleOutOfScreenPenalty();
+      }
+    }
+  }
+
+  void _handleOutOfScreenPenalty() {
+    if (_controller.isRunning && !_controller.isBreak) {
+      setState(() {
+        _isTreeDead = true;
+      });
+      _controller.resetTimer();
+      WakelockPlus.disable();
+      if (_autoDndEnabled) {
+        DNDService.setDND(false);
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              return AlertDialog(
+                backgroundColor: const Color(0xff0b0f19),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.broken_image_rounded, color: Colors.redAccent),
+                    SizedBox(width: 10),
+                    Text("Focus Bhang! 🥀", style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+                content: const Text(
+                  "Aapne focus screen ko chhod diya ya app background kiya, isliye aapka tree murjha gaya! 🥀 Sachi consistency ke liye focus screen par bane rahein.",
+                  style: TextStyle(color: Colors.white70),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Okay, Agli Baar Behtar Karenge", style: TextStyle(color: Colors.greenAccent)),
+                  ),
+                ],
+              );
+            },
+          );
+        }
+      });
+    }
   }
 
   // Refined Glassmorphic Container (Optimized for performance)
@@ -216,8 +462,8 @@ class _FocusScreenState extends State<FocusScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        padding: const EdgeInsets.all(8),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: isSelected ? activeColor.withOpacity(0.25) : Colors.white.withOpacity(0.04),
@@ -441,7 +687,7 @@ class _FocusScreenState extends State<FocusScreen> {
           return "Keep hammering keys! We are compiling greatness right now. 💻";
         case FocusCategory.study:
           return "Excellent concentration. Your focus is shaping your future! 📚";
-        case FocusCategory.writing:
+         case FocusCategory.writing:
           return "Let the words flow. Capture those ideas onto the canvas! ✍️";
         case FocusCategory.science:
           return "Analyzing, learning, absorbing. Scientific discovery in progress! 🧪";
@@ -467,10 +713,11 @@ class _FocusScreenState extends State<FocusScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Dynamic Gradient Background
+          // Dynamic Gradient Background (Zen Mode is Pure OLED Black)
           AnimatedContainer(
-            duration: const Duration(seconds: 1),
-            decoration: BoxDecoration(
+            duration: const Duration(milliseconds: 500),
+            color: _isDeepFocusMode ? const Color(0xFF000000) : null,
+            decoration: _isDeepFocusMode ? null : BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -479,19 +726,23 @@ class _FocusScreenState extends State<FocusScreen> {
             ),
           ),
 
-          // Particle System Overlay
-          BackgroundParticles(theme: _controller.currentTheme),
+          // Particle System Overlay (Hidden in Zen Mode)
+          if (!_isDeepFocusMode)
+            BackgroundParticles(theme: _controller.currentTheme),
 
-          // Confetti widget
-          Align(
-            alignment: Alignment.topCenter,
-            child: ConfettiWidget(
-              confettiController: _confettiController,
-              blastDirection: pi / 2,
-              emissionFrequency: 0.05,
-              numberOfParticles: 25,
-              gravity: 0.15,
-              colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+          // Confetti widget (Z-indexed properly but wrapped in IgnorePointer to allow tapping through, with ValueKey to prevent rebuild destruction)
+          IgnorePointer(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConfettiWidget(
+                key: const ValueKey('studysync_confetti'),
+                confettiController: _confettiController,
+                blastDirection: pi / 2,
+                emissionFrequency: 0.05,
+                numberOfParticles: 25,
+                gravity: 0.15,
+                colors: const [Colors.green, Colors.blue, Colors.pink, Colors.orange, Colors.purple],
+              ),
             ),
           ),
 
@@ -502,167 +753,258 @@ class _FocusScreenState extends State<FocusScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- HEADER ROW (Streaks, Badges, Theme Selector) ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Streak Badge
-                      _buildGlassCard(
-                        opacity: 0.08,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          child: Row(
-                            children: [
-                              ShaderMask(
-                                shaderCallback: (bounds) => const LinearGradient(
-                                  colors: [Colors.orange, Colors.redAccent],
-                                ).createShader(bounds),
-                                child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 22),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Streak: ${_controller.streak}",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                  if (!_isDeepFocusMode) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            // Streak Badge
+                            _buildGlassCard(
+                              opacity: 0.08,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                                child: Row(
+                                  children: [
+                                    ShaderMask(
+                                      shaderCallback: (bounds) => const LinearGradient(
+                                        colors: [Colors.orange, Colors.redAccent],
+                                      ).createShader(bounds),
+                                      child: const Icon(Icons.local_fire_department_rounded, color: Colors.white, size: 18),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      "${_controller.streak}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Garden Button
+                            GestureDetector(
+                              onTap: _showGardenBottomSheet,
+                              child: _buildGlassCard(
+                                opacity: 0.08,
+                                borderColor: Colors.greenAccent.withOpacity(0.3),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.yard_rounded, color: Colors.greenAccent, size: 18),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Zen Mode Button
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                setState(() {
+                                  _isDeepFocusMode = true;
+                                });
+                              },
+                              child: _buildGlassCard(
+                                opacity: 0.08,
+                                borderColor: Colors.indigoAccent.withOpacity(0.3),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.nights_stay_rounded, color: Colors.indigoAccent, size: 18),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            // Leaderboard Button
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const LeaderboardScreen(),
+                                  ),
+                                );
+                              },
+                              child: _buildGlassCard(
+                                opacity: 0.08,
+                                borderColor: Colors.amberAccent.withOpacity(0.3),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.emoji_events_rounded, color: Colors.amberAccent, size: 18),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
 
-                      // Theme Switches
-                      Row(
-                        children: [
-                          _buildThemeButton(FocusTheme.forest, "🌲", Colors.greenAccent),
-                          _buildThemeButton(FocusTheme.cosmic, "🌌", Colors.cyanAccent),
-                          _buildThemeButton(FocusTheme.cyberpunk, "🌆", Colors.pinkAccent),
-                          _buildThemeButton(FocusTheme.zen, "🌅", Colors.amberAccent),
-                        ],
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 15),
+                        // Theme Switches
+                        Row(
+                          children: [
+                            _buildThemeButton(FocusTheme.forest, "🌲", Colors.greenAccent),
+                            _buildThemeButton(FocusTheme.cosmic, "🌌", Colors.cyanAccent),
+                            _buildThemeButton(FocusTheme.cyberpunk, "🌆", Colors.pinkAccent),
+                            _buildThemeButton(FocusTheme.zen, "🌅", Colors.amberAccent),
+                          ],
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 15),
 
-                  // --- AI COMPANION / COACH CHAT BUBBLE ---
-                  _buildGlassCard(
-                    opacity: 0.05,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          // Mascot Avatar
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: accentColor.withOpacity(0.12),
-                              border: Border.all(color: accentColor.withOpacity(0.3), width: 1.5),
-                              boxShadow: [
-                                BoxShadow(color: accentColor.withOpacity(0.2), blurRadius: 8)
-                              ]
-                            ),
-                            child: Icon(Icons.bolt_rounded, color: accentColor, size: 24),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "FOCUS COACH",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: accentColor,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  _getCompanionMessage(),
-                                  style: const TextStyle(
-                                    color: Colors.white70, // Soft white
-                                    fontSize: 13,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () {
-                              HapticFeedback.lightImpact();
-                              TTSService().toggleSpeak(_getCompanionMessage());
-                            },
-                            child: Container(
+                    // --- AI COMPANION / COACH CHAT BUBBLE ---
+                    _buildGlassCard(
+                      opacity: 0.05,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            // Mascot Avatar
+                            Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.04),
-                                border: Border.all(color: Colors.white12, width: 1),
+                                color: accentColor.withOpacity(0.12),
+                                border: Border.all(color: accentColor.withOpacity(0.3), width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(color: accentColor.withOpacity(0.2), blurRadius: 8)
+                                ]
                               ),
-                              child: Icon(
-                                TTSService().isSpeakingText(_getCompanionMessage())
-                                    ? Icons.volume_off_rounded
-                                    : Icons.volume_up_rounded,
-                                color: accentColor,
-                                size: 18,
-                              ),
+                              child: Icon(Icons.bolt_rounded, color: accentColor, size: 24),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-
-                  // --- MAIN TIMER & ARTWORK COMPONENT ---
-                  Center(
-                    child: GestureDetector(
-                      onTap: _showCustomDurationSheet,
-                      child: FocusArtwork(
-                        progress: progress,
-                        theme: _controller.currentTheme,
-                        isRunning: _controller.isRunning,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _controller.formatTime(),
-                              style: const TextStyle(
-                                fontSize: 62,
-                                fontWeight: FontWeight.w200,
-                                color: Colors.white,
-                                letterSpacing: -1,
-                                fontFamily: 'Courier', // Nice retro layout
-                              ),
-                            ),
-                            Text(
-                              _controller.isBreak ? "BREAK IN PROGRESS" : "TAP TO CONFIGURE",
-                              style: TextStyle(
-                                color: _controller.isBreak ? Colors.white38 : accentColor.withOpacity(0.9),
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.5,
-                                shadows: [
-                                  Shadow(color: accentColor.withOpacity(0.4), blurRadius: 4)
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "FOCUS COACH",
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: accentColor,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    _getCompanionMessage(),
+                                    style: const TextStyle(
+                                      color: Colors.white70, // Soft white
+                                      fontSize: 13,
+                                      height: 1.3,
+                                    ),
+                                  ),
                                 ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                TTSService().toggleSpeak(_getCompanionMessage());
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.04),
+                                  border: Border.all(color: Colors.white12, width: 1),
+                                ),
+                                child: Icon(
+                                  TTSService().isSpeakingText(_getCompanionMessage())
+                                      ? Icons.volume_off_rounded
+                                      : Icons.volume_up_rounded,
+                                  color: accentColor,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ),
+                    const SizedBox(height: 25),
+                  ],
+                  const SizedBox(height: 25),
+
+                  // --- MAIN TIMER & ARTWORK COMPONENT ---
+                  Center(
+                    child: GestureDetector(
+                      onTap: _showCustomDurationSheet,
+                      child: AnimatedBuilder(
+                        animation: _breathingController,
+                        builder: (context, child) {
+                          final double breatheVal = _breathingController.value;
+                          final double scale = _isDeepFocusMode ? 1.0 + (breatheVal * 0.02) : 1.0;
+                          final double glowBlur = _isDeepFocusMode ? 30.0 + (breatheVal * 20.0) : 30.0;
+                          final double glowSpread = _isDeepFocusMode ? 6.0 + (breatheVal * 6.0) : 6.0;
+                          final double glowOpacity = _isDeepFocusMode ? 0.08 + (breatheVal * 0.12) : 0.08;
+
+                          return Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: accentColor.withOpacity(glowOpacity),
+                                    blurRadius: glowBlur,
+                                    spreadRadius: glowSpread,
+                                  ),
+                                ],
+                              ),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: FocusArtwork(
+                          progress: progress,
+                          theme: _controller.currentTheme,
+                          isRunning: _controller.isRunning,
+                          treeType: _selectedTreeType,
+                          isTreeDead: _isTreeDead,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _controller.formatTime(),
+                                style: const TextStyle(
+                                  fontSize: 62,
+                                  fontWeight: FontWeight.w200,
+                                  color: Colors.white,
+                                  letterSpacing: -1,
+                                  fontFamily: 'Courier',
+                                ),
+                              ),
+                              Text(
+                                _controller.isBreak ? "BREAK IN PROGRESS" : "TAP TO CONFIGURE",
+                                style: TextStyle(
+                                  color: _controller.isBreak ? Colors.white38 : accentColor.withOpacity(0.9),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                  shadows: [
+                                    Shadow(color: accentColor.withOpacity(0.4), blurRadius: 4)
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 25),
 
-                  // --- CONTROLS ROW & PRESETS ---
-                  _buildControlsRow(accentColor),
+                  if (!_isDeepFocusMode) ...[
+                    // --- CONTROLS ROW & PRESETS ---
+                    _buildControlsRow(accentColor),
                   const SizedBox(height: 25),
+
+                  // --- TREE SELECTION HORIZONTAL ROW ---
+                  _buildTreeSelectorRow(accentColor),
 
                   // --- CATEGORY HORIZONTAL ROW ---
                   const Text(
@@ -930,11 +1272,259 @@ class _FocusScreenState extends State<FocusScreen> {
                   ),
                   const SizedBox(height: 20),
                 ],
-              ),
+              ],
             ),
           ),
+        ),
+
+          // Floating Exit button for Zen Mode
+          if (_isDeepFocusMode)
+            Positioned(
+              top: 15,
+              right: 15,
+              child: SafeArea(
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    setState(() {
+                      _isDeepFocusMode = false;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withOpacity(0.05),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Icon(Icons.fullscreen_exit_rounded, color: Colors.white70, size: 22),
+                  ),
+                ),
+              ),
+            ),
+
         ],
       ),
+    );
+  }
+
+  Widget _buildTreeSelectorRow(Color accentColor) {
+    if (_controller.isRunning) return const SizedBox.shrink();
+
+    final List<Map<String, String>> trees = [
+      {"id": "cherry_blossom", "name": "Cherry Blossom 🌸", "desc": "Pink floral tree"},
+      {"id": "cosmic_bonsai", "name": "Cosmic Bonsai 🔮", "desc": "Glowing blue leaves"},
+      {"id": "cyber_pine", "name": "Cyber-Pine ⚡", "desc": "Neon digital tree"},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Choose Seed to Plant 🌲",
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: trees.map((tree) {
+            final isSelected = _selectedTreeType == tree["id"];
+            return Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    _selectedTreeType = tree["id"]!;
+                    _isTreeDead = false;
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? accentColor.withOpacity(0.12) : Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? accentColor : Colors.white12,
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        tree["name"]!.split(" ").last, // emoji
+                        style: const TextStyle(fontSize: 22),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        tree["name"]!.split(" ").first, // name
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white54,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        tree["desc"]!,
+                        style: TextStyle(
+                          color: isSelected ? accentColor.withOpacity(0.7) : Colors.white30,
+                          fontSize: 8.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 25),
+      ],
+    );
+  }
+
+  void _showGardenBottomSheet() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> gardenList = prefs.getStringList("focus_garden_trees") ?? [];
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 380,
+          decoration: const BoxDecoration(
+            color: Color(0xff0b0f19),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(28),
+              topRight: Radius.circular(28),
+            ),
+            border: Border(
+              top: BorderSide(color: Colors.greenAccent, width: 1.2),
+            ),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.yard_rounded, color: Colors.greenAccent, size: 24),
+                      SizedBox(width: 10),
+                      Text(
+                        "Mera Personal Garden 🌳",
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "Aapne abhi tak kul ${gardenList.length} trees safaltapoorvak grow kiye hain!",
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: gardenList.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.nature_rounded, color: Colors.white.withOpacity(0.08), size: 64),
+                          const SizedBox(height: 12),
+                          const Text(
+                            "Garden abhi khali hai! 🏕️",
+                            style: TextStyle(color: Colors.white38, fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            "Ek focus session start kijiye aur pehla beej boiye!",
+                            style: TextStyle(color: Colors.white24, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GridView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 0.85,
+                      ),
+                      itemCount: gardenList.length,
+                      itemBuilder: (context, index) {
+                        final parts = gardenList[index].split("|");
+                        final type = parts[0];
+                        final dateStr = parts.length > 1 ? parts[1] : "Today";
+                        final mins = parts.length > 2 ? parts[2] : "25";
+
+                        String treeEmoji = "🌸";
+                        String treeName = "Sakura";
+                        Color themeColor = Colors.pinkAccent;
+                        if (type == "cosmic_bonsai") {
+                          treeEmoji = "🔮";
+                          treeName = "Bonsai";
+                          themeColor = Colors.purpleAccent;
+                        } else if (type == "cyber_pine") {
+                          treeEmoji = "⚡";
+                          treeName = "Cyber-Pine";
+                          themeColor = Colors.cyanAccent;
+                        }
+
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.03),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: themeColor.withOpacity(0.2)),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(treeEmoji, style: const TextStyle(fontSize: 28)),
+                              const SizedBox(height: 8),
+                              Text(
+                                treeName,
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "${mins}m • $dateStr",
+                                style: const TextStyle(color: Colors.white38, fontSize: 8.5),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -951,8 +1541,19 @@ class _FocusScreenState extends State<FocusScreen> {
                 HapticFeedback.mediumImpact();
                 if (_controller.isRunning) {
                   _controller.pauseTimer();
+                  WakelockPlus.disable();
+                  if (_autoDndEnabled) {
+                    DNDService.setDND(false);
+                  }
                 } else {
+                  setState(() {
+                    _isTreeDead = false;
+                  });
                   _controller.startTimer();
+                  WakelockPlus.enable();
+                  if (_autoDndEnabled) {
+                    DNDService.setDND(true);
+                  }
                 }
               },
               child: Container(
@@ -984,7 +1585,16 @@ class _FocusScreenState extends State<FocusScreen> {
             GestureDetector(
               onTap: () {
                 HapticFeedback.lightImpact();
-                _controller.resetTimer();
+                _confirmCancelSession(() {
+                  _controller.resetTimer();
+                  WakelockPlus.disable();
+                  if (_autoDndEnabled) {
+                    DNDService.setDND(false);
+                  }
+                  setState(() {
+                    _isTreeDead = true;
+                  });
+                });
               },
               child: CircleAvatar(
                 radius: 28,
@@ -1084,13 +1694,17 @@ class _FocusScreenState extends State<FocusScreen> {
 
   // Soundscape visualizer and selectors
   Widget _buildAmbientController(Color accentColor) {
-    final sounds = ["Lofi Beats", "Rain & Storm", "Campfire"];
+    final avgVol = (_lofiVol + _rainVol + _campfireVol) / 3;
+
     return _buildGlassCard(
       opacity: 0.04,
+      borderColor: _controller.isSoundscapeActive ? accentColor.withOpacity(0.15) : Colors.white.withOpacity(0.05),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Master row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1108,48 +1722,225 @@ class _FocusScreenState extends State<FocusScreen> {
                       },
                     ),
                     const Text(
-                      "Focus Frequency",
-                      style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                      "Soundscape Mixer 🎵",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
-                // Animated wave bars
-                AnimatedSoundwave(isPlaying: _controller.isSoundscapeActive, color: accentColor),
+                // Volume reactive Equalizer
+                AnimatedSoundwave(
+                  isPlaying: _controller.isSoundscapeActive,
+                  volume: avgVol,
+                  color: accentColor,
+                ),
               ],
             ),
-            if (_controller.isSoundscapeActive) ...[
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: sounds.map((s) {
-                  bool active = _controller.activeSoundscape == s;
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      _controller.toggleSoundscape(true, soundType: s);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: active ? accentColor.withOpacity(0.15) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        s,
-                        style: TextStyle(
-                          color: active ? Colors.white : Colors.white38,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+            const SizedBox(height: 12),
+
+            // Track 1: Lofi Beats (Pink Slider)
+            _buildMixerTrack(
+              title: "Lofi Beats",
+              emoji: "🎵",
+              volume: _lofiVol,
+              activeColor: Colors.pinkAccent,
+              onChanged: (val) {
+                setState(() {
+                  _lofiVol = val;
+                  if (val > 0 && !_controller.isSoundscapeActive) {
+                    _controller.toggleSoundscape(true);
+                  } else if (_lofiVol == 0 && _rainVol == 0 && _campfireVol == 0) {
+                    _controller.toggleSoundscape(false);
+                  }
+                });
+                _syncAmbientSounds();
+              },
+            ),
+            const SizedBox(height: 8),
+
+            // Track 2: Rain & Storm (Cyan Slider)
+            _buildMixerTrack(
+              title: "Rain & Storm",
+              emoji: "🌧️",
+              volume: _rainVol,
+              activeColor: Colors.cyanAccent,
+              onChanged: (val) {
+                setState(() {
+                  _rainVol = val;
+                  if (val > 0 && !_controller.isSoundscapeActive) {
+                    _controller.toggleSoundscape(true);
+                  } else if (_lofiVol == 0 && _rainVol == 0 && _campfireVol == 0) {
+                    _controller.toggleSoundscape(false);
+                  }
+                });
+                _syncAmbientSounds();
+              },
+            ),
+            const SizedBox(height: 8),
+
+            // Track 3: Campfire (Amber Slider)
+            _buildMixerTrack(
+              title: "Campfire Crackle",
+              emoji: "🪵",
+              volume: _campfireVol,
+              activeColor: Colors.amberAccent,
+              onChanged: (val) {
+                setState(() {
+                  _campfireVol = val;
+                  if (val > 0 && !_controller.isSoundscapeActive) {
+                    _controller.toggleSoundscape(true);
+                  } else if (_lofiVol == 0 && _rainVol == 0 && _campfireVol == 0) {
+                    _controller.toggleSoundscape(false);
+                  }
+                });
+                _syncAmbientSounds();
+              },
+            ),
+            const Divider(color: Colors.white10, height: 24),
+
+            // Do Not Disturb (DND) Auto-Silence Toggle Switch
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _autoDndEnabled ? Icons.notifications_off_rounded : Icons.notifications_active_rounded,
+                      color: _autoDndEnabled ? Colors.redAccent : Colors.white38,
+                      size: 18,
                     ),
-                  );
-                }).toList(),
-              )
-            ]
+                    const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Auto-Silence Messages 🤫",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          _autoDndEnabled 
+                              ? "DND active. Important calls will ring." 
+                              : "Mutes texts. Calls ring normally.",
+                          style: const TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Switch.adaptive(
+                  value: _autoDndEnabled,
+                  activeColor: accentColor,
+                  onChanged: (val) async {
+                    HapticFeedback.selectionClick();
+                    if (val) {
+                      // Enable auto DND: check permissions
+                      final granted = await DNDService.isPermissionGranted();
+                      if (granted) {
+                        setState(() {
+                          _autoDndEnabled = true;
+                        });
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool("auto_dnd_enabled", true);
+                      } else {
+                        // Request Permission Show dialog
+                        _showDndExplanationDialog();
+                      }
+                    } else {
+                      // Turn off auto DND
+                      setState(() {
+                        _autoDndEnabled = false;
+                      });
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool("auto_dnd_enabled", false);
+                      // Turn off DND immediately just in case
+                      DNDService.setDND(false);
+                    }
+                  },
+                ),
+              ],
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildMixerTrack({
+    required String title,
+    required String emoji,
+    required double volume,
+    required Color activeColor,
+    required ValueChanged<double> onChanged,
+  }) {
+    final isMasterActive = _controller.isSoundscapeActive;
+    final trackColor = isMasterActive ? activeColor : Colors.white24;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 26,
+          child: Text(
+            emoji,
+            style: const TextStyle(fontSize: 16),
+          ),
+        ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isMasterActive ? Colors.white : Colors.white30,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 6,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 2,
+              activeTrackColor: trackColor,
+              inactiveTrackColor: Colors.white.withOpacity(0.05),
+              thumbColor: trackColor,
+              overlayColor: trackColor.withOpacity(0.12),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              value: volume,
+              min: 0.0,
+              max: 1.0,
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 32,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              volume == 0 ? "Off" : "${(volume * 100).toInt()}%",
+              style: TextStyle(
+                color: volume == 0 ? Colors.white24 : trackColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Courier',
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1277,8 +2068,14 @@ class ParticlePainter extends CustomPainter {
 // Bouncing Soundwave Visualization
 class AnimatedSoundwave extends StatefulWidget {
   final bool isPlaying;
+  final double volume;
   final Color color;
-  const AnimatedSoundwave({super.key, required this.isPlaying, required this.color});
+  const AnimatedSoundwave({
+    super.key,
+    required this.isPlaying,
+    required this.volume,
+    required this.color,
+  });
 
   @override
   State<AnimatedSoundwave> createState() => _AnimatedSoundwaveState();
@@ -1301,14 +2098,15 @@ class _AnimatedSoundwaveState extends State<AnimatedSoundwave> with SingleTicker
   void _updateHeights() {
     if (mounted) {
       setState(() {
-        if (!widget.isPlaying) {
+        if (!widget.isPlaying || widget.volume <= 0.01) {
           for (int i = 0; i < _heights.length; i++) {
             _heights[i] = _heights[i] * 0.8 + 0.6;
           }
           return;
         }
         for (int i = 0; i < _heights.length; i++) {
-          double target = 3.0 + _random.nextDouble() * 18.0;
+          final maxTarget = 3.0 + widget.volume * 18.0;
+          final target = 3.0 + _random.nextDouble() * (maxTarget - 3.0);
           _heights[i] = _heights[i] * 0.5 + target * 0.5;
         }
       });
@@ -1345,6 +2143,8 @@ class FocusArtwork extends StatelessWidget {
   final double progress;
   final FocusTheme theme;
   final bool isRunning;
+  final String treeType;
+  final bool isTreeDead;
   final Widget child;
 
   const FocusArtwork({
@@ -1352,6 +2152,8 @@ class FocusArtwork extends StatelessWidget {
     required this.progress,
     required this.theme,
     required this.isRunning,
+    required this.treeType,
+    required this.isTreeDead,
     required this.child,
   });
 
@@ -1397,7 +2199,11 @@ class FocusArtwork extends StatelessWidget {
   CustomPainter _getPainter() {
     switch (theme) {
       case FocusTheme.forest:
-        return SproutPainter(progress: progress);
+        return SproutPainter(
+          progress: progress,
+          treeType: treeType,
+          isDead: isTreeDead,
+        );
       case FocusTheme.cosmic:
         return RocketPainter(progress: progress);
       case FocusTheme.cyberpunk:
@@ -1408,10 +2214,17 @@ class FocusArtwork extends StatelessWidget {
   }
 }
 
-// --- SproutPainter (Forest Sprout) ---
+// --- SproutPainter (Forest Sprout / Focus Forest) ---
 class SproutPainter extends CustomPainter {
   final double progress;
-  SproutPainter({required this.progress});
+  final String treeType;
+  final bool isDead;
+
+  SproutPainter({
+    required this.progress,
+    required this.treeType,
+    required this.isDead,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1448,7 +2261,6 @@ class SproutPainter extends CustomPainter {
       ..color = const Color(0xFF6E4A28).withOpacity(0.8)
       ..style = PaintingStyle.fill;
     
-    // Position of soil mound base: center.dy + radius * 0.65
     final moundCenter = Offset(center.dx, center.dy + radius * 0.72);
     final soilRect = Rect.fromCenter(
       center: moundCenter,
@@ -1457,65 +2269,150 @@ class SproutPainter extends CustomPainter {
     );
     canvas.drawOval(soilRect, soilPaint);
 
-    // Drawing the growing stem
-    if (progress > 0) {
-      final plantPaint = Paint()
-        ..color = Colors.greenAccent
+    // Dead/Twig State (Guilt Mechanic)
+    if (isDead) {
+      final deadPaint = Paint()
+        ..color = const Color(0xff475569) // Dark Slate grey
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.5
+        ..strokeWidth = 3
         ..strokeCap = StrokeCap.round;
 
-      final startPoint = moundCenter;
-      final maxStemLength = radius * 0.55;
-      final currentStemLength = maxStemLength * progress;
-
-      final stemPath = Path();
-      stemPath.moveTo(startPoint.dx, startPoint.dy);
+      final branchPath = Path();
+      branchPath.moveTo(moundCenter.dx, moundCenter.dy);
+      // Main droopy trunk
+      branchPath.quadraticBezierTo(moundCenter.dx - 8, moundCenter.dy - 20, moundCenter.dx - 12, moundCenter.dy - 35);
+      // Drooping left twig
+      branchPath.moveTo(moundCenter.dx - 8, moundCenter.dy - 20);
+      branchPath.quadraticBezierTo(moundCenter.dx - 18, moundCenter.dy - 25, moundCenter.dx - 22, moundCenter.dy - 22);
+      // Drooping right twig
+      branchPath.moveTo(moundCenter.dx - 10, moundCenter.dy - 28);
+      branchPath.quadraticBezierTo(moundCenter.dx - 2, moundCenter.dy - 34, moundCenter.dx + 4, moundCenter.dy - 31);
       
-      // Control coordinates to sway the stem leftwards slightly
-      final c1 = Offset(startPoint.dx - 12 * progress, startPoint.dy - currentStemLength * 0.5);
-      final endPoint = Offset(startPoint.dx - 6 * progress, startPoint.dy - currentStemLength);
-      
-      stemPath.quadraticBezierTo(c1.dx, c1.dy, endPoint.dx, endPoint.dy);
-      canvas.drawPath(stemPath, plantPaint);
+      canvas.drawPath(branchPath, deadPaint);
 
-      // Leaves
+      // Draw single falling leaf
+      final leafPaint = Paint()..color = const Color(0xffef4444).withOpacity(0.7); // Faded Red
+      canvas.drawCircle(Offset(moundCenter.dx - 18, moundCenter.dy - 12), 2.5, leafPaint);
+      return;
+    }
+
+    // Stage 0: Seed (0 to 10% progress)
+    if (progress <= 0.1) {
+      final seedPaint = Paint()
+        ..color = const Color(0xFFC29C6C)
+        ..style = PaintingStyle.fill;
+      canvas.drawOval(
+        Rect.fromCenter(center: Offset(moundCenter.dx, moundCenter.dy - 2), width: 6, height: 4),
+        seedPaint,
+      );
+      return;
+    }
+
+    // Growing Tree
+    final Color branchColor = treeType == "cyber_pine" ? const Color(0xff0891b2) : const Color(0xFF5D4037);
+    final double maxStemLength = radius * 0.55;
+    final double currentStemLength = maxStemLength * progress;
+
+    final trunkPaint = Paint()
+      ..color = branchColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5 * progress.clamp(0.5, 1.2)
+      ..strokeCap = StrokeCap.round;
+
+    final startPoint = moundCenter;
+    final endPoint = Offset(startPoint.dx - 6 * progress, startPoint.dy - currentStemLength);
+
+    final stemPath = Path();
+    stemPath.moveTo(startPoint.dx, startPoint.dy);
+    final c1 = Offset(startPoint.dx - 10 * progress, startPoint.dy - currentStemLength * 0.5);
+    stemPath.quadraticBezierTo(c1.dx, c1.dy, endPoint.dx, endPoint.dy);
+    canvas.drawPath(stemPath, trunkPaint);
+
+    // Leaves / Foliage
+    // Stage 1 (Sprout): Sprouts leaves after 15% progress
+    if (progress > 0.15) {
       final leafPaint = Paint()
-        ..color = Colors.lightGreenAccent.withOpacity(0.9)
+        ..color = treeType == "cyber_pine" 
+            ? const Color(0xff22d3ee) 
+            : (treeType == "cherry_blossom" ? const Color(0xfff472b6) : const Color(0xff10b981))
         ..style = PaintingStyle.fill;
 
-      // Leaf 1: sprouts after 30% progress
-      if (progress > 0.3) {
-        final leaf1Path = Path();
-        final l1Start = Offset(startPoint.dx - 4 * progress, startPoint.dy - currentStemLength * 0.4);
-        leaf1Path.moveTo(l1Start.dx, l1Start.dy);
-        leaf1Path.quadraticBezierTo(l1Start.dx - 14, l1Start.dy - 6, l1Start.dx - 18, l1Start.dy - 3);
-        leaf1Path.quadraticBezierTo(l1Start.dx - 10, l1Start.dy + 4, l1Start.dx, l1Start.dy);
-        canvas.drawPath(leaf1Path, leafPaint);
-      }
+      final leaf1Path = Path();
+      final l1Start = Offset(startPoint.dx - 4 * progress, startPoint.dy - currentStemLength * 0.4);
+      leaf1Path.moveTo(l1Start.dx, l1Start.dy);
+      leaf1Path.quadraticBezierTo(l1Start.dx - 12, l1Start.dy - 4, l1Start.dx - 15, l1Start.dy - 2);
+      leaf1Path.quadraticBezierTo(l1Start.dx - 8, l1Start.dy + 3, l1Start.dx, l1Start.dy);
+      canvas.drawPath(leaf1Path, leafPaint);
+    }
 
-      // Leaf 2: sprouts after 65% progress
-      if (progress > 0.65) {
-        final leaf2Path = Path();
-        final l2Start = Offset(startPoint.dx - 5 * progress, startPoint.dy - currentStemLength * 0.7);
-        leaf2Path.moveTo(l2Start.dx, l2Start.dy);
-        leaf2Path.quadraticBezierTo(l2Start.dx + 14, l2Start.dy - 6, l2Start.dx + 18, l2Start.dy - 3);
-        leaf2Path.quadraticBezierTo(l2Start.dx + 10, l2Start.dy + 4, l2Start.dx, l2Start.dy);
-        canvas.drawPath(leaf2Path, leafPaint);
-      }
+    // Stage 2: Sprouts second leaf after 40% progress
+    if (progress > 0.40) {
+      final leafPaint = Paint()
+        ..color = treeType == "cyber_pine" 
+            ? const Color(0xff06b6d4) 
+            : (treeType == "cherry_blossom" ? const Color(0xffec4899) : const Color(0xff059669))
+        ..style = PaintingStyle.fill;
 
-      // Flower/Bud: sprouts at 90%+ progress
-      if (progress > 0.9) {
-        final flowerPaint = Paint()
-          ..color = Colors.amberAccent
-          ..style = PaintingStyle.fill;
-        canvas.drawCircle(endPoint, 5, flowerPaint);
+      final leaf2Path = Path();
+      final l2Start = Offset(startPoint.dx - 5 * progress, startPoint.dy - currentStemLength * 0.7);
+      leaf2Path.moveTo(l2Start.dx, l2Start.dy);
+      leaf2Path.quadraticBezierTo(l2Start.dx + 12, l2Start.dy - 4, l2Start.dx + 15, l2Start.dy - 2);
+      leaf2Path.quadraticBezierTo(l2Start.dx + 8, l2Start.dy + 3, l2Start.dx, l2Start.dy);
+      canvas.drawPath(leaf2Path, leafPaint);
+    }
+
+    // Stage 3 (Twig branching): Sprouts branch twigs after 70% progress
+    if (progress > 0.70) {
+      final twigPaint = Paint()
+        ..color = branchColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round;
+
+      final branchPath = Path();
+      final branchStart = Offset(startPoint.dx - 6 * progress, startPoint.dy - currentStemLength * 0.6);
+      branchPath.moveTo(branchStart.dx, branchStart.dy);
+      branchPath.quadraticBezierTo(branchStart.dx - 15, branchStart.dy - 12, branchStart.dx - 22, branchStart.dy - 8);
+      canvas.drawPath(branchPath, twigPaint);
+
+      final foliagePaint = Paint()
+        ..color = treeType == "cyber_pine" 
+            ? const Color(0xff22d3ee).withOpacity(0.85) 
+            : (treeType == "cherry_blossom" ? const Color(0xfffce7f3) : const Color(0xff34d399))
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(branchStart.dx - 22, branchStart.dy - 8), 5 * progress, foliagePaint);
+    }
+
+    // Stage 4 (Full grown foliage & glow): Sprouts massive top crown after 90% progress
+    if (progress > 0.90) {
+      final topFoliageColor = treeType == "cyber_pine" 
+          ? const Color(0xff22d3ee) 
+          : (treeType == "cherry_blossom" ? const Color(0xfff472b6) : const Color(0xff10b981));
+
+      final foliagePaint = Paint()
+        ..color = topFoliageColor.withOpacity(0.9)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawCircle(Offset(endPoint.dx, endPoint.dy - 3), 10, foliagePaint);
+      canvas.drawCircle(Offset(endPoint.dx - 8, endPoint.dy - 6), 8, foliagePaint);
+      canvas.drawCircle(Offset(endPoint.dx + 8, endPoint.dy - 5), 7, foliagePaint);
+
+      if (treeType == "cherry_blossom") {
+        final petalPaint = Paint()..color = Colors.white;
+        canvas.drawCircle(Offset(endPoint.dx - 2, endPoint.dy - 8), 1.5, petalPaint);
+        canvas.drawCircle(Offset(endPoint.dx + 5, endPoint.dy - 2), 1.5, petalPaint);
+      } else if (treeType == "cyber_pine") {
+        final sparkPaint = Paint()..color = Colors.cyanAccent;
+        canvas.drawCircle(Offset(endPoint.dx - 4, endPoint.dy - 12), 1.0, sparkPaint);
+        canvas.drawCircle(Offset(endPoint.dx + 6, endPoint.dy - 10), 1.0, sparkPaint);
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant SproutPainter oldDelegate) => oldDelegate.progress != progress;
+  bool shouldRepaint(covariant SproutPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.treeType != treeType || oldDelegate.isDead != isDead;
+  }
 }
 
 // --- RocketPainter (Space rocket climb) ---

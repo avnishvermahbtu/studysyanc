@@ -8,12 +8,14 @@ import 'package:studysync/features/ai_coach/backlog_screen.dart';
 import 'package:studysync/features/ai_coach/notes_to_quiz_screen.dart';
 import 'package:studysync/features/ai_coach/roadmap_screen.dart';
 import 'package:studysync/features/ai_coach/quiz_revision_screen.dart';
+import 'package:studysync/features/ai_coach/ai_chatbot_screen.dart';
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import 'backlog_service.dart';
 import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
 import '../../../core/services/tts_service.dart';
+import 'package:studysync/core/theme/theme_manager.dart';
 
 class AICoachScreen extends StatefulWidget {
   const AICoachScreen({super.key});
@@ -33,6 +35,11 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
   bool _isOffline = false;
   bool _isCheckingConnection = false;
 
+  int? _selectionChance;
+  String _targetExam = "JEE Main/Advanced";
+  int _streak = 0;
+  bool _challengeDoneToday = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +50,29 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
     );
     TTSService().addListener(_onTtsStateChanged);
     _loadCoachingAdvice();
+    _loadDailyChallengeState();
+  }
+
+  Future<void> _loadDailyChallengeState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final chance = prefs.getInt('ai_selection_chance');
+      final exam = prefs.getString('ai_target_exam') ?? "JEE Main/Advanced";
+      final streak = prefs.getInt('ai_daily_streak') ?? 0;
+      
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final lastChallenge = prefs.getString('ai_last_challenge_date') ?? "";
+      final challengeDone = lastChallenge == todayStr;
+      
+      setState(() {
+        _selectionChance = chance;
+        _targetExam = exam;
+        _streak = streak;
+        _challengeDoneToday = challengeDone;
+      });
+    } catch (e) {
+      // Ignored
+    }
   }
 
   void _onTtsStateChanged(String? text, bool isSpeaking) {
@@ -206,14 +236,14 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
     final minutesToday = _focusController.weeklyMinutes[dayKey] ?? 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xff020617),
+      backgroundColor: ThemeManager.bgColor,
       appBar: AppBar(
-        title: const Text("🤖 AI Coach", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text("🤖 AI Coach", style: TextStyle(color: ThemeManager.textColor, fontWeight: FontWeight.bold, fontSize: 20)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: ThemeManager.textMuted),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -287,63 +317,70 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
       opacity: 0.08,
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
+        child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xff6366f1).withOpacity(0.12),
-                border: Border.all(color: const Color(0xff6366f1).withOpacity(0.3), width: 1.5),
-              ),
-              child: const Icon(Icons.school_rounded, color: Color(0xff6366f1), size: 30),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    rank.toUpperCase(),
-                    style: const TextStyle(color: Color(0xff6366f1), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xff6366f1).withOpacity(0.12),
+                    border: Border.all(color: const Color(0xff6366f1).withOpacity(0.3), width: 1.5),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Focus Level $lvl",
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: LinearProgressIndicator(
-                      value: lvlProgress,
-                      minHeight: 5,
-                      backgroundColor: Colors.white.withOpacity(0.05),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: const Icon(Icons.school_rounded, color: Color(0xff6366f1), size: 30),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "${_focusController.xp} / ${nextLvlXp} XP",
-                        style: const TextStyle(color: Colors.white38, fontSize: 10),
+                        rank.toUpperCase(),
+                        style: const TextStyle(color: Color(0xff6366f1), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        "Today: ${minutesToday}m",
-                        style: const TextStyle(color: Color(0xff10b981), fontSize: 10, fontWeight: FontWeight.bold),
+                        "Focus Level $lvl",
+                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: LinearProgressIndicator(
+                          value: lvlProgress,
+                          minHeight: 5,
+                          backgroundColor: Colors.white.withOpacity(0.05),
+                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xff6366f1)),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${_focusController.xp} / ${nextLvlXp} XP",
+                            style: const TextStyle(color: Colors.white38, fontSize: 10),
+                          ),
+                          Text(
+                            "Today: ${minutesToday}m",
+                            style: const TextStyle(color: Color(0xff10b981), fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
   }
+
+
+
 
   // Coaching advice bubble
   Widget _buildCoachingSaysCard() {
@@ -519,6 +556,16 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
   Widget _buildModulesGrid() {
     return Column(
       children: [
+        // Chat with Sync Button
+        _buildModuleButton(
+          title: "Chat with Sync Coach",
+          subtitle: "Ask doubts & scan questions with camera",
+          icon: Icons.chat_bubble_rounded,
+          gradientColors: [const Color(0xffa855f7), const Color(0xff6366f1)],
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIChatbotScreen())),
+        ),
+        const SizedBox(height: 12),
+
         // AI Roadmap Button
         _buildModuleButton(
           title: "AI Study Roadmap",

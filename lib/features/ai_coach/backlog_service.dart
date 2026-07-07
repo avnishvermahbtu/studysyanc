@@ -79,4 +79,37 @@ class BacklogService {
         .doc(docId)
         .delete();
   }
+
+  Future<void> splitBacklogBatch({
+    required String parentId,
+    required String subject,
+    required String priority,
+    required List<Map<String, dynamic>> subtasks,
+  }) async {
+    final batch = firestore.batch();
+
+    // 1. Delete parent backlog
+    final parentRef = firestore.collection('backlogs').doc(parentId);
+    batch.delete(parentRef);
+
+    // 2. Add each subtask as a new backlog doc
+    for (final sub in subtasks) {
+      final docRef = firestore.collection('backlogs').doc();
+      batch.set(docRef, {
+        'userId': effectiveUid,
+        'subject': subject,
+        'chapter': sub['chapter'] as String,
+        'completed': false,
+        'priority': priority,
+        'estimatedMinutes': sub['estimatedMinutes'] is int ? sub['estimatedMinutes'] : 30,
+        'notes': sub['notes'] as String? ?? '',
+        'isToday': false,
+        'completedAt': null,
+        'createdAt': Timestamp.now(),
+      });
+    }
+
+    // 3. Commit the batch transaction
+    await batch.commit();
+  }
 }

@@ -50,19 +50,13 @@ class _BacklogScreenState extends State<BacklogScreen> {
         notes: parent.notes,
       );
 
-      // 1. Delete original parent backlog
-      await service.deleteBacklog(parent.id);
-
-      // 2. Add each subtask as a new individual backlog
-      for (final sub in subtasks) {
-        await service.addBacklog(
-          subject: parent.subject,
-          chapter: sub['chapter'] as String,
-          priority: parent.priority, // Preserve priority
-          estimatedMinutes: sub['estimatedMinutes'] as int,
-          notes: sub['notes'] as String,
-        );
-      }
+      // Perform atomic batch split operation
+      await service.splitBacklogBatch(
+        parentId: parent.id,
+        subject: parent.subject,
+        priority: parent.priority,
+        subtasks: subtasks,
+      );
 
       _confettiController.play();
       

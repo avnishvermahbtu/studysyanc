@@ -136,6 +136,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
   bool _isAnswerSubmitted = false;
   int _correctAnswers = 0;
   bool _quizFinished = false;
+  int _netXpAwarded = 0;
 
   int _questionCount = 5;
   String _difficulty = "Easy";
@@ -306,8 +307,32 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
       }
 
       final dynamic decoded = jsonDecode(jsonResponse);
+      List<dynamic> list = [];
       if (decoded is List) {
-        final parsedQuestions = decoded.map((e) {
+        list = decoded;
+      } else if (decoded is Map) {
+        final possibleKeys = ['questions', 'quiz', 'mcqs', 'items'];
+        bool found = false;
+        for (var key in possibleKeys) {
+          if (decoded[key] is List) {
+            list = decoded[key] as List;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          final listKey = decoded.keys.firstWhere(
+            (k) => decoded[k] is List,
+            orElse: () => null,
+          );
+          if (listKey != null) {
+            list = decoded[listKey] as List;
+          }
+        }
+      }
+
+      if (list.isNotEmpty) {
+        final parsedQuestions = list.map((e) {
           final q = e as Map<String, dynamic>;
           return {
             'question': q['question'] ?? 'No question text',
@@ -333,7 +358,12 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to generate quiz. Please check your notes/topic length and try again.")),
+          SnackBar(
+            content: Text("Failed to generate quiz: ${e.toString()}"),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
       }
     }
@@ -385,11 +415,10 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
         _isAnswerSubmitted = false;
       });
     } else {
-      // Award XP based on correct answers (+10 XP per question)
-      final xpAwarded = _correctAnswers * 10;
-      if (xpAwarded > 0) {
-        _focusController.addXp(xpAwarded);
-      }
+      // Award XP based on correct answers (+10 XP) and negative marking for incorrect answers (-3 XP)
+      final incorrectAnswers = _questions.length - _correctAnswers;
+      _netXpAwarded = (_correctAnswers * 10) - (incorrectAnswers * 3);
+      _focusController.addXp(_netXpAwarded);
 
       setState(() {
         _quizFinished = true;
@@ -1024,7 +1053,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
   // Summary results screen
   Widget _buildSummaryScreen() {
     final double scorePct = _correctAnswers / _questions.length;
-    final int xpAwarded = _correctAnswers * 10;
+    final int xpAwarded = _netXpAwarded;
     
     String feedbackTitle = "Keep Practicing! 📚";
     String feedbackDesc = "Good try! Keep working on your focus blocks to secure a solid rank.";
@@ -1111,7 +1140,13 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
                         Container(width: 1, height: 30, color: Colors.white10),
                         _buildSummaryStat("Accuracy", "${(scorePct * 100).toInt()}%"),
                         Container(width: 1, height: 30, color: Colors.white10),
-                        _buildSummaryStat("XP Reward", xpAwarded > 0 ? "+$xpAwarded" : "0"),
+                        _buildSummaryStat(
+                          "XP Result",
+                          xpAwarded > 0 ? "+$xpAwarded" : "$xpAwarded",
+                          textColor: xpAwarded > 0
+                              ? Colors.greenAccent
+                              : (xpAwarded < 0 ? Colors.redAccent : Colors.white),
+                        ),
                       ],
                     ),
                   ],
@@ -1152,10 +1187,10 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
   }
 
   // Summary Stat column builder
-  Widget _buildSummaryStat(String label, String value) {
+  Widget _buildSummaryStat(String label, String value, {Color textColor = Colors.white}) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
       ],

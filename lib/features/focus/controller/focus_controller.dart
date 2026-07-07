@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:studysync/core/services/widget_service.dart';
+import 'package:studysync/core/services/notification_service.dart';
 
 enum FocusTheme { forest, cosmic, cyberpunk, zen }
 enum FocusCategory { study, coding, writing, science, meditation }
@@ -20,6 +24,8 @@ class FocusController extends ChangeNotifier {
   // Timer State
   int _totalSeconds = 1500;
   int _maxSeconds = 1500;
+  int _configuredFocusSeconds = 1500;
+  int _lastCompletedFocusMinutes = 25;
   bool _isRunning = false;
   bool _isBreak = false;
   Timer? _timer;
@@ -34,6 +40,7 @@ class FocusController extends ChangeNotifier {
   int _xp = 0;
   int _level = 1;
   int _dailyStudyGoal = 240; // Default daily goal in minutes (4 hours)
+  int _lastDecayPenalty = 0;
 
   // Weekly study sessions counter
   Map<String, int> _weeklyData = {
@@ -66,6 +73,9 @@ class FocusController extends ChangeNotifier {
     "meditation": 0,
   };
 
+  // Focus History daily map
+  Map<String, int> _historyMap = {};
+
   // Soundscape (ambient)
   bool _isSoundscapeActive = false;
   String _activeSoundscape = "Lofi Beats"; // "Lofi Beats", "Rain & Storm", "Campfire"
@@ -91,6 +101,14 @@ class FocusController extends ChangeNotifier {
   Map<String, int> get categoryMinutes => _categoryMinutes;
   bool get isSoundscapeActive => _isSoundscapeActive;
   String get activeSoundscape => _activeSoundscape;
+  int get lastDecayPenalty => _lastDecayPenalty;
+  Map<String, int> get historyMap => _historyMap;
+  int get lastCompletedFocusMinutes => _lastCompletedFocusMinutes;
+
+  void clearDecayPenalty() {
+    _lastDecayPenalty = 0;
+    notifyListeners();
+  }
 
 
   // Load state from SharedPreferences
@@ -102,6 +120,9 @@ class FocusController extends ChangeNotifier {
     _xp = prefs.getInt("focus_xp") ?? 0;
     _level = prefs.getInt("focus_level") ?? 1;
     _dailyStudyGoal = prefs.getInt("daily_study_goal") ?? 240;
+    _configuredFocusSeconds = 1500;
+    _maxSeconds = 1500;
+    _totalSeconds = 1500;
 
     // Load Theme
     final themeStr = prefs.getString("focus_theme") ?? "forest";
@@ -148,6 +169,35 @@ class FocusController extends ChangeNotifier {
       "meditation": prefs.getInt("cat_meditation") ?? 0,
     };
 
+    // Load Focus History Map for Heatmap
+    final historyJson = prefs.getString("focus_history_map") ?? "";
+    if (historyJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(historyJson) as Map<String, dynamic>;
+        _historyMap = decoded.map((k, v) => MapEntry(k, v as int));
+      } catch (e) {
+        _historyMap = {};
+      }
+    }
+
+    if (_historyMap.isEmpty) {
+      // Pre-populate with beautiful mock data for testing/demo
+      final random = Random();
+      final now = DateTime.now();
+      for (int i = 0; i < 150; i++) {
+        final date = now.subtract(Duration(days: i));
+        final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+        // 45% chance of study sessions on any day, with 1 to 4 sessions
+        if (random.nextDouble() < 0.45) {
+          _historyMap[dateStr] = random.nextInt(4) + 1; // 1 to 4 sessions
+        }
+      }
+      // Save it
+      await prefs.setString("focus_history_map", jsonEncode(_historyMap));
+    }
+
+    await checkInactivityDecay();
+
     notifyListeners();
   }
 
@@ -185,12 +235,15 @@ class FocusController extends ChangeNotifier {
   }
 
   // Set Timer values
-  void setTimerDuration(int minutes, int seconds) {
+  Future<void> setTimerDuration(int minutes, int seconds) async {
     if (_isRunning) return;
     _maxSeconds = (minutes * 60) + seconds;
     _totalSeconds = _maxSeconds;
+    _configuredFocusSeconds = _maxSeconds;
     _isBreak = false;
     notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt("configured_focus_seconds", _configuredFocusSeconds);
   }
 
   // Start timer ticking
@@ -199,6 +252,8 @@ class FocusController extends ChangeNotifier {
 
     _isRunning = true;
     notifyListeners();
+    WidgetService.updateWidgetData();
+    NotificationService().scheduleFocusCompletionNotification(_totalSeconds, _isBreak);
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_totalSeconds <= 0) {
@@ -211,8 +266,9 @@ class FocusController extends ChangeNotifier {
       } else {
         _totalSeconds--;
         
-        // Award 1 XP for focus every 2 seconds
-        if (!_isBreak && _totalSeconds % 2 == 0) {
+        // Award 1 XP for focus every 60 seconds (1 minute) of active work
+        final elapsedSeconds = _maxSeconds - _totalSeconds;
+        if (!_isBreak && elapsedSeconds > 0 && elapsedSeconds % 60 == 0) {
           addXp(1);
         }
         notifyListeners();
@@ -225,48 +281,78 @@ class FocusController extends ChangeNotifier {
     _timer?.cancel();
     _isRunning = false;
     notifyListeners();
+    WidgetService.updateWidgetData();
+    NotificationService().cancelFocusCompletionNotification();
+  }
+
+  void toggleTimerState() {
+    if (_isRunning) {
+      pauseTimer();
+    } else {
+      startTimer();
+    }
+    WidgetService.updateWidgetData();
   }
 
   // Reset Timer
   void resetTimer() {
     _timer?.cancel();
     _isRunning = false;
-    _totalSeconds = _maxSeconds;
+    if (_isBreak) {
+      _isBreak = false;
+    }
+    _totalSeconds = _configuredFocusSeconds;
+    _maxSeconds = _configuredFocusSeconds;
     notifyListeners();
+    WidgetService.updateWidgetData();
+    NotificationService().cancelFocusCompletionNotification();
   }
 
-  // Complete Focus Session
   Future<void> completeSession() async {
+    NotificationService().cancelFocusCompletionNotification();
     if (_isBreak) {
       // Break is complete. Switch back to focus state
       _isBreak = false;
-      _totalSeconds = _maxSeconds;
+      _totalSeconds = _configuredFocusSeconds;
+      _maxSeconds = _configuredFocusSeconds;
       notifyListeners();
+      WidgetService.updateWidgetData();
       return;
     }
 
-    // Award bonus XP for completing a session
-    addXp(50);
-
-    // Save streak & updates
-    await updateStreak();
     final focusMinutes = _maxSeconds ~/ 60;
-    await updateWeekly(focusMinutes);
+    _lastCompletedFocusMinutes = focusMinutes;
 
-    // Update and save category minutes
+    // 1. Instantly trigger UI transition to break mode (5 minutes)
+    _isBreak = true;
+    _totalSeconds = 300; // 5 min break
+    _maxSeconds = 300;
+    notifyListeners();
+
+    // 2. Instantly call completion celebration callback (Confetti & dynamic SnackBar)
+    onSessionCompleted?.call();
+
+    // 3. Perform background gamification XP addition and async DB saves
     final catKey = _currentCategory.toString().split('.').last;
     _categoryMinutes[catKey] = (_categoryMinutes[catKey] ?? 0) + focusMinutes;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt("cat_$catKey", _categoryMinutes[catKey]!);
 
-    // Call onSessionCompleted callback
-    onSessionCompleted?.call();
+    final completionBonus = max(1, focusMinutes);
+    await addXp(completionBonus);
+    await updateWeekly(focusMinutes);
 
-    // Auto trigger a 5 minute break if focus was completed
-    _isBreak = true;
-    _totalSeconds = 300; // 5 min break
-    _maxSeconds = 300;
-    notifyListeners();
+    final now = DateTime.now();
+    final days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    final dayKey = days[now.weekday % 7];
+    final minutesToday = _weeklyMinutes[dayKey] ?? 0;
+    if (minutesToday >= 15) {
+      await updateStreak();
+    }
+
+    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    _historyMap[todayStr] = (_historyMap[todayStr] ?? 0) + 1;
+    await prefs.setString("focus_history_map", jsonEncode(_historyMap));
   }
 
   // Start short break or focus break manually
@@ -288,25 +374,38 @@ class FocusController extends ChangeNotifier {
     return _level * 250;
   }
 
-  // XP addition and level-up detection
+  // XP addition and level-up/down wraps
   Future<void> addXp(int amount) async {
     _xp += amount;
     
+    bool levelChanged = false;
+
     // Check level-up
     int needed = xpNeededForNextLevel();
-    bool leveledUp = false;
     while (_xp >= needed) {
       _xp -= needed;
       _level++;
       needed = xpNeededForNextLevel();
-      leveledUp = true;
+      levelChanged = true;
+    }
+
+    // Check level-down
+    while (_xp < 0 && _level > 1) {
+      _level--;
+      int prevNeeded = xpNeededForNextLevel();
+      _xp += prevNeeded;
+      levelChanged = true;
+    }
+
+    if (_xp < 0 && _level == 1) {
+      _xp = 0;
     }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt("focus_xp", _xp);
     await prefs.setInt("focus_level", _level);
 
-    if (leveledUp) {
+    if (levelChanged && amount > 0) {
       onLevelUp?.call();
     }
     notifyListeners();
@@ -352,6 +451,10 @@ class FocusController extends ChangeNotifier {
         final name = user.displayName ?? "Student";
         final email = user.email ?? "";
         final cumulativeXp = ((_level - 1) * _level ~/ 2) * 250 + _xp;
+        
+        // Sum total focus minutes from all categories
+        final totalMinutes = _categoryMinutes.values.fold(0, (sum, val) => sum + val);
+
         await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
           "uid": user.uid,
           "name": name,
@@ -360,6 +463,7 @@ class FocusController extends ChangeNotifier {
           "level": _level,
           "streak": _streak,
           "cumulativeXp": cumulativeXp,
+          "totalFocusMinutes": totalMinutes,
           "lastUpdated": FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
@@ -413,6 +517,41 @@ class FocusController extends ChangeNotifier {
     if (_level >= 8) return "🔥 Deep Work Ninja";
     if (_level >= 4) return "💪 Concentration Mage";
     return "🌱 Novice Sprout";
+  }
+
+  // Check daily inactivity decay and apply penalties
+  Future<void> checkInactivityDecay() async {
+    if (_lastDate.isEmpty) return;
+
+    try {
+      final last = DateTime.parse(_lastDate);
+      final now = DateTime.now();
+      
+      // Compare calendar days ignoring times
+      final lastDay = DateTime(last.year, last.month, last.day);
+      final today = DateTime(now.year, now.month, now.day);
+      final diffDays = today.difference(lastDay).inDays;
+
+      if (diffDays > 1) {
+        final missedDays = diffDays - 1;
+        final penalty = 20 * missedDays; // 20 XP decay per missed study day
+
+        _streak = 0;
+        _lastDecayPenalty = penalty;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt("streak", _streak);
+
+        await addXp(-penalty);
+
+        // Set lastDate to yesterday to avoid duplicate decay calculations on restarts
+        final yesterday = today.subtract(const Duration(days: 1));
+        _lastDate = "${yesterday.year}-${yesterday.month}-${yesterday.day}";
+        await prefs.setString("lastDate", _lastDate);
+      }
+    } catch (e) {
+      // safe fallback
+    }
   }
 
   @override
