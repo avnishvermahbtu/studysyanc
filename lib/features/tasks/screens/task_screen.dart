@@ -261,6 +261,7 @@ class _TaskScreenState extends State<TaskScreen> {
             btnOkOnPress: () async {
               Navigator.pop(context);
               Task task = Task(
+                userId: FirebaseAuth.instance.currentUser?.uid ?? "",
                 title: titleController.text.trim(),
                 description: descController.text.trim(),
                 priority: selectedPriority,
@@ -344,6 +345,7 @@ class _TaskScreenState extends State<TaskScreen> {
     }
 
     Task task = Task(
+      userId: FirebaseAuth.instance.currentUser?.uid ?? "",
       title: titleController.text.trim(),
       description: descController.text.trim(),
       priority: selectedPriority,
@@ -529,7 +531,7 @@ class _TaskScreenState extends State<TaskScreen> {
                   ],
                 ),
                 const SizedBox(height: 15),
-                // Teacher Recommended Toggle Row
+                // Student Notice Toggle Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -548,14 +550,14 @@ class _TaskScreenState extends State<TaskScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Teacher Recommended?",
+                              "Student Notice?",
                               style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold),
                             ),
                             Text(
-                              "Marks this quest as recommended",
+                              "Marks this quest as a student notice",
                               style: TextStyle(color: Colors.white38, fontSize: 10),
                             ),
                           ],
@@ -576,7 +578,7 @@ class _TaskScreenState extends State<TaskScreen> {
                 if (isRecommended) ...[
                   const SizedBox(height: 15),
                   _buildTextField(
-                      recommendedByController, "Teacher Name (e.g. Prof. Amit)", Icons.person_rounded),
+                      recommendedByController, "Posted By (e.g. Admin)", Icons.person_rounded),
                 ],
                 const SizedBox(height: 20),
                 // Deadline selector gesture container
@@ -719,7 +721,10 @@ class _TaskScreenState extends State<TaskScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       body: StreamBuilder<QuerySnapshot>(
-        stream: firestore.collection("tasks").snapshots(),
+        stream: firestore
+            .collection("tasks")
+            .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+            .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -1568,8 +1573,8 @@ class _TaskScreenState extends State<TaskScreen> {
                                             const SizedBox(width: 4),
                                             Text(
                                               task.recommendedBy.isNotEmpty
-                                                  ? "Rec: ${task.recommendedBy}"
-                                                  : "Recommended",
+                                                  ? "Notice: ${task.recommendedBy}"
+                                                  : "Student Notice",
                                               style: const TextStyle(
                                                 color: Colors.orange,
                                                 fontSize: 10,

@@ -2,7 +2,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:percent_indicator/circular_percent_indicator.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:percent_indicator/percent_indicator.dart';
 import 'package:studysync/features/focus/controller/focus_controller.dart';
 import 'package:studysync/features/dashboard/widgets/dashboard_card.dart';
 import 'package:studysync/features/tasks/models/task_model.dart';
@@ -44,19 +45,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
     _loadJourneyStats();
   }
 
+  String _getPrefix() {
+    final user = FirebaseAuth.instance.currentUser;
+    return user != null ? "${user.uid}_" : "guest_";
+  }
+
   Future<void> _loadJourneyStats() async {
     final prefs = await SharedPreferences.getInstance();
-    String? joinDate = prefs.getString("journey_join_date");
+    final prefix = _getPrefix();
+    String? joinDate = prefs.getString("${prefix}journey_join_date");
     if (joinDate == null) {
       final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
       final months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       joinDate = "${oneMonthAgo.day} ${months[oneMonthAgo.month - 1]} ${oneMonthAgo.year}";
-      await prefs.setString("journey_join_date", joinDate);
-      await prefs.setInt("journey_starting_level", 1);
+      await prefs.setString("${prefix}journey_join_date", joinDate);
+      await prefs.setInt("${prefix}journey_starting_level", 1);
     }
     setState(() {
       _joinDate = joinDate!;
-      _startingLevel = prefs.getInt("journey_starting_level") ?? 1;
+      _startingLevel = prefs.getInt("${prefix}journey_starting_level") ?? 1;
     });
   }
 
@@ -691,7 +698,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   // --- TASKS TAB ---
   Widget _buildTasksTab() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection("tasks").snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("tasks")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -822,10 +832,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
     );
   }
 
-  // --- CLASSES TAB ---
   Widget _buildClassesTab() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection("routine").snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("routine")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());

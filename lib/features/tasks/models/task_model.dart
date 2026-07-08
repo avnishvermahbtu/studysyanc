@@ -30,6 +30,7 @@ class SubTask {
 
 class Task {
   String? id;
+  String userId;
   String title;
   String description;
   String priority;
@@ -42,6 +43,7 @@ class Task {
 
   Task({
     this.id = "",
+    required this.userId,
     required this.title,
     required this.description,
     required this.priority,
@@ -62,6 +64,7 @@ class Task {
 
     return Task(
       id: documentId,
+      userId: data['userId'] ?? '',
       title: data['title'] ?? '',
       description: data['description'] ?? '',
       priority: data['priority'] ?? '',
@@ -79,6 +82,7 @@ class Task {
   /// Convert task -> Firebase
   Map<String, dynamic> toMap() {
     return {
+      "userId": userId,
       "title": title,
       "description": description,
       "priority": priority,

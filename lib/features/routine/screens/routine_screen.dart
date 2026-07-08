@@ -108,8 +108,10 @@ class _RoutineScreenState extends State<RoutineScreen> {
           .where("date", isGreaterThanOrEqualTo: Timestamp.fromDate(startOfToday))
           .get();
 
+      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
       final routines = querySnapshot.docs
           .map((doc) => Routine.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .where((r) => r.userId == currentUid)
           .toList();
 
       await NotificationService().syncUpcomingRoutines(routines);
@@ -951,6 +953,7 @@ class _RoutineScreenState extends State<RoutineScreen> {
     );
 
     final routineData = {
+      "userId": FirebaseAuth.instance.currentUser?.uid ?? "",
       "title": titleController.text.trim(),
       "location": locationController.text.trim(),
       "type": selectedType,
@@ -991,8 +994,10 @@ class _RoutineScreenState extends State<RoutineScreen> {
 
         var list = <Routine>[];
         if (snapshot.hasData) {
+          final currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
           list = snapshot.data!.docs
               .map((doc) => Routine.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+              .where((r) => r.userId == currentUid)
               .toList();
 
           // Sort items chronologically by parsed time

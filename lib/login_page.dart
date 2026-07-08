@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:studysync/features/navigation/main_navigation_screen.dart';
 import 'package:studysync/signup_page.dart';
+import 'package:studysync/features/focus/controller/focus_controller.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -63,6 +64,180 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  void _showForgotPasswordDialog() {
+    final TextEditingController resetEmailController = TextEditingController(text: emailController.text.trim());
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    bool isResetLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xff0f172a),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.white10),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xff6366f1).withOpacity(0.15),
+                    ),
+                    child: const Icon(
+                      Icons.lock_reset_rounded,
+                      color: Color(0xff6366f1),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Reset Password",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      "Enter your registered email address, and we will send you a secure link to reset your password.",
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: resetEmailController,
+                      enabled: !isResetLoading,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return "Please enter your email";
+                        }
+                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                        if (!emailRegex.hasMatch(value.trim())) {
+                          return "Please enter a valid email address";
+                        }
+                        return null;
+                      },
+                      decoration: InputDecoration(
+                        labelText: "Email Address",
+                        labelStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.white54, size: 20),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.white10),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.white10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Color(0xff6366f1)),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.redAccent),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(color: Colors.redAccent),
+                        ),
+                        errorStyle: const TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                if (!isResetLoading) ...[
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      "Cancel",
+                      style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      if (formKey.currentState?.validate() ?? false) {
+                        final email = resetEmailController.text.trim();
+                        setStateDialog(() {
+                          isResetLoading = true;
+                        });
+
+                        try {
+                          await _auth.sendPasswordResetEmail(email: email);
+                          if (mounted) {
+                            Navigator.pop(dialogContext); // Close reset dialog
+                            _showAlert("Success", "Password reset link sent to $email. Please check your inbox.");
+                          }
+                        } on FirebaseAuthException catch (ex) {
+                          if (mounted) {
+                            setStateDialog(() {
+                              isResetLoading = false;
+                            });
+                            String errorMessage = "Failed to send reset email.";
+                            if (ex.code == 'user-not-found') {
+                              errorMessage = "No user found with this email address.";
+                            } else if (ex.code == 'invalid-email') {
+                              errorMessage = "The email address is invalid.";
+                            } else {
+                              errorMessage = ex.message ?? ex.code;
+                            }
+                            _showAlert("Error", errorMessage);
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            setStateDialog(() {
+                              isResetLoading = false;
+                            });
+                            _showAlert("Error", "Something went wrong. Please try again later.");
+                          }
+                        }
+                      }
+                    },
+                    child: const Text(
+                      "Send Link",
+                      style: TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ] else ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          color: Color(0xff6366f1),
+                          strokeWidth: 2.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+
   Future<void> login() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
@@ -105,6 +280,7 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         Navigator.pop(context); // Dismiss loading loader
+        await FocusController().clearAndReload();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it
@@ -187,6 +363,7 @@ class _LoginPageState extends State<LoginPage> {
 
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
+        await FocusController().clearAndReload();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it
@@ -209,8 +386,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Premium Glassmorphic Card Container
-  Widget _buildGlassCard({required Widget child, double blur = 20, double opacity = 0.03, Color borderColor = Colors.white10}) {
+  Widget _buildGlassCard({required Widget child, double blur = 6.0, double opacity = 0.03, Color borderColor = Colors.white10}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
@@ -356,7 +532,30 @@ class _LoginPageState extends State<LoginPage> {
                                 focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent)),
                               ),
                             ),
-                            const SizedBox(height: 28),
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {
+                                  HapticFeedback.selectionClick();
+                                  _showForgotPasswordDialog();
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(50, 30),
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text(
+                                  "Forgot Password?",
+                                  style: TextStyle(
+                                    color: Color(0xff6366f1),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
 
                             // Login Action button
                             Container(
@@ -462,15 +661,18 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Social link widget
   Widget _buildSocialButton({
     required IconData icon,
     required String text,
     required Color iconColor,
     required VoidCallback onTap,
   }) {
-    return _buildGlassCard(
-      opacity: 0.04,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        border: Border.all(color: Colors.white10, width: 1.2),
+        borderRadius: BorderRadius.circular(30),
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(30),

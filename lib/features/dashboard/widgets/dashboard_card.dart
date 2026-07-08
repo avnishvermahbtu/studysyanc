@@ -131,7 +131,7 @@ class _DashboardCardState extends State<DashboardCard>
           ? ClipRRect(
               borderRadius: BorderRadius.circular(widget.borderRadius),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
                 child: Container(
                   color: Colors.transparent,
                   child: CustomPaint(

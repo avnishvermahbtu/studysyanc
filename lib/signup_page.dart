@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:studysync/login_page.dart';
+import 'package:studysync/features/focus/controller/focus_controller.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -112,6 +113,7 @@ class _SignupPageState extends State<SignupPage> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('student_name', name);
         }
+        await FocusController().clearAndReload();
         // Direct transition back to login page
         Navigator.pushReplacement(
           context,
@@ -132,7 +134,7 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   // Glassmorphic Card Container
-  Widget _buildGlassCard({required Widget child, double blur = 20, double opacity = 0.03, Color borderColor = Colors.white10}) {
+  Widget _buildGlassCard({required Widget child, double blur = 6.0, double opacity = 0.03, Color borderColor = Colors.white10}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(

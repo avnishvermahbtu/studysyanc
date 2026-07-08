@@ -15,6 +15,7 @@ import '../focus/controller/focus_controller.dart';
 import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
 import 'quiz_revision_service.dart';
+import '../../core/utils/error_handler.dart';
 
 class NotesToQuizScreen extends StatefulWidget {
   final List<Map<String, dynamic>>? preloadedQuestions;
@@ -357,14 +358,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Failed to generate quiz: ${e.toString()}"),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        showApiKeyErrorDialog(context, e);
       }
     }
   }

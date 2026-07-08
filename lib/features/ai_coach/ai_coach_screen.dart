@@ -9,6 +9,8 @@ import 'package:studysync/features/ai_coach/notes_to_quiz_screen.dart';
 import 'package:studysync/features/ai_coach/roadmap_screen.dart';
 import 'package:studysync/features/ai_coach/quiz_revision_screen.dart';
 import 'package:studysync/features/ai_coach/ai_chatbot_screen.dart';
+import 'package:studysync/features/routine/screens/feynman_trainer_screen.dart';
+
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import 'backlog_service.dart';
@@ -164,6 +166,7 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
       // 1. Fetch pending tasks due today
       final tasksQuery = await FirebaseFirestore.instance
           .collection("tasks")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
           .where("isDone", isEqualTo: false)
           .get();
       
@@ -211,7 +214,7 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
   }
 
   // Premium Glassmorphic card structure
-  Widget _buildGlassCard({required Widget child, double blur = 15, double opacity = 0.05, Color borderColor = Colors.white10}) {
+  Widget _buildGlassCard({required Widget child, double blur = 6.0, double opacity = 0.05, Color borderColor = Colors.white10}) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
@@ -472,6 +475,7 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection("tasks")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
           .where("isDone", isEqualTo: false)
           .snapshots(),
       builder: (context, snapshot) {
@@ -609,7 +613,18 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
         ),
         const SizedBox(height: 12),
 
+        // Feynman Voice Trainer Button
+        _buildModuleButton(
+          title: "Feynman Voice Trainer",
+          subtitle: "Explain concepts vocally & receive AI grading",
+          icon: Icons.record_voice_over_rounded,
+          gradientColors: [const Color(0xffec4899), const Color(0xffdb2777)],
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FeynmanTrainerScreen())),
+        ),
+        const SizedBox(height: 12),
+
         // Smart Revision Bank Button
+
         _buildModuleButton(
           title: "Smart Revision Bank",
           subtitle: "Revise mistakes & review bookmarked doubts",
@@ -642,17 +657,13 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
           )
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              border: Border.all(color: Colors.white10, width: 1.2),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: InkWell(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.045),
+          border: Border.all(color: Colors.white10, width: 1.2),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: InkWell(
               onTap: () {
                 HapticFeedback.lightImpact();
                 onTap();
@@ -716,8 +727,6 @@ class _AICoachScreenState extends State<AICoachScreen> with SingleTickerProvider
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
 }

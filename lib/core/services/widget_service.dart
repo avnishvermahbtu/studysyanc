@@ -18,6 +18,7 @@ class WidgetService {
       if (user != null) {
         final querySnapshot = await FirebaseFirestore.instance
             .collection("tasks")
+            .where("userId", isEqualTo: user.uid)
             .where("isDone", isEqualTo: false)
             .get();
         activeTasksCount = querySnapshot.docs.length;

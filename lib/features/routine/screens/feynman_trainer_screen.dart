@@ -3,6 +3,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:studysync/features/tasks/screens/ai_service.dart';
 import 'feynman_result_screen.dart';
+import '../../../core/utils/error_handler.dart';
 
 class FeynmanTrainerScreen extends StatefulWidget {
   const FeynmanTrainerScreen({super.key});
@@ -152,6 +153,9 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
       setState(() {
         _errorMessage = "Failed to evaluate: ${e.toString()}";
       });
+      if (mounted) {
+        showApiKeyErrorDialog(context, e);
+      }
     } finally {
       if (mounted) {
         setState(() {

@@ -30,24 +30,20 @@ class AICoachService {
     Uint8List? imageBytes,
     String? mimeType,
   }) async {
-    try {
-      final List<Content> contents = List.from(chatHistory);
+    final List<Content> contents = List.from(chatHistory);
 
-      if (imageBytes != null && mimeType != null) {
-        contents.add(
-          Content.multi([
-            DataPart(mimeType, imageBytes),
-            TextPart(prompt.isEmpty ? "Analyze this study material or solve this question." : prompt),
-          ]),
-        );
-      } else {
-        contents.add(Content.text(prompt));
-      }
-
-      final response = await model.generateContent(contents);
-      return response.text?.trim() ?? "I'm sorry, I couldn't analyze that. Please try again.";
-    } catch (e) {
-      return "Sorry, I encountered an error: $e";
+    if (imageBytes != null && mimeType != null) {
+      contents.add(
+        Content.multi([
+          DataPart(mimeType, imageBytes),
+          TextPart(prompt.isEmpty ? "Analyze this study material or solve this question." : prompt),
+        ]),
+      );
+    } else {
+      contents.add(Content.text(prompt));
     }
+
+    final response = await model.generateContent(contents);
+    return response.text?.trim() ?? "I'm sorry, I couldn't analyze that. Please try again.";
   }
 }

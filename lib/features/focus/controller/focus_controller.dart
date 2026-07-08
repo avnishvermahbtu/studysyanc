@@ -111,28 +111,36 @@ class FocusController extends ChangeNotifier {
   }
 
 
+  String _getPrefix() {
+    final user = FirebaseAuth.instance.currentUser;
+    return user != null ? "${user.uid}_" : "guest_";
+  }
+
   // Load state from SharedPreferences
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    final prefix = _getPrefix();
 
-    _streak = prefs.getInt("streak") ?? 0;
-    _lastDate = prefs.getString("lastDate") ?? "";
-    _xp = prefs.getInt("focus_xp") ?? 0;
-    _level = prefs.getInt("focus_level") ?? 1;
-    _dailyStudyGoal = prefs.getInt("daily_study_goal") ?? 240;
-    _configuredFocusSeconds = 1500;
-    _maxSeconds = 1500;
-    _totalSeconds = 1500;
+    _streak = prefs.getInt("${prefix}streak") ?? 0;
+    _lastDate = prefs.getString("${prefix}lastDate") ?? "";
+    _xp = prefs.getInt("${prefix}focus_xp") ?? 0;
+    _level = prefs.getInt("${prefix}focus_level") ?? 1;
+    _dailyStudyGoal = prefs.getInt("${prefix}daily_study_goal") ?? 240;
+    
+    final configuredSec = prefs.getInt("${prefix}configured_focus_seconds") ?? 1500;
+    _configuredFocusSeconds = configuredSec;
+    _maxSeconds = configuredSec;
+    _totalSeconds = configuredSec;
 
     // Load Theme
-    final themeStr = prefs.getString("focus_theme") ?? "forest";
+    final themeStr = prefs.getString("${prefix}focus_theme") ?? "forest";
     _currentTheme = FocusTheme.values.firstWhere(
       (e) => e.toString().split('.').last == themeStr,
       orElse: () => FocusTheme.forest,
     );
 
     // Load Category
-    final catStr = prefs.getString("focus_category") ?? "study";
+    final catStr = prefs.getString("${prefix}focus_category") ?? "study";
     _currentCategory = FocusCategory.values.firstWhere(
       (e) => e.toString().split('.').last == catStr,
       orElse: () => FocusCategory.study,
@@ -140,37 +148,37 @@ class FocusController extends ChangeNotifier {
 
     // Load weekly session stats
     _weeklyData = {
-      "Mon": prefs.getInt("Mon") ?? 0,
-      "Tue": prefs.getInt("Tue") ?? 0,
-      "Wed": prefs.getInt("Wed") ?? 0,
-      "Thu": prefs.getInt("Thu") ?? 0,
-      "Fri": prefs.getInt("Fri") ?? 0,
-      "Sat": prefs.getInt("Sat") ?? 0,
-      "Sun": prefs.getInt("Sun") ?? 0,
+      "Mon": prefs.getInt("${prefix}Mon") ?? 0,
+      "Tue": prefs.getInt("${prefix}Tue") ?? 0,
+      "Wed": prefs.getInt("${prefix}Wed") ?? 0,
+      "Thu": prefs.getInt("${prefix}Thu") ?? 0,
+      "Fri": prefs.getInt("${prefix}Fri") ?? 0,
+      "Sat": prefs.getInt("${prefix}Sat") ?? 0,
+      "Sun": prefs.getInt("${prefix}Sun") ?? 0,
     };
 
     // Load weekly session minutes
     _weeklyMinutes = {
-      "Mon": prefs.getInt("Mon_minutes") ?? ((prefs.getInt("Mon") ?? 0) * 25),
-      "Tue": prefs.getInt("Tue_minutes") ?? ((prefs.getInt("Tue") ?? 0) * 25),
-      "Wed": prefs.getInt("Wed_minutes") ?? ((prefs.getInt("Wed") ?? 0) * 25),
-      "Thu": prefs.getInt("Thu_minutes") ?? ((prefs.getInt("Thu") ?? 0) * 25),
-      "Fri": prefs.getInt("Fri_minutes") ?? ((prefs.getInt("Fri") ?? 0) * 25),
-      "Sat": prefs.getInt("Sat_minutes") ?? ((prefs.getInt("Sat") ?? 0) * 25),
-      "Sun": prefs.getInt("Sun_minutes") ?? ((prefs.getInt("Sun") ?? 0) * 25),
+      "Mon": prefs.getInt("${prefix}Mon_minutes") ?? ((prefs.getInt("${prefix}Mon") ?? 0) * 25),
+      "Tue": prefs.getInt("${prefix}Tue_minutes") ?? ((prefs.getInt("${prefix}Tue") ?? 0) * 25),
+      "Wed": prefs.getInt("${prefix}Wed_minutes") ?? ((prefs.getInt("${prefix}Wed") ?? 0) * 25),
+      "Thu": prefs.getInt("${prefix}Thu_minutes") ?? ((prefs.getInt("${prefix}Thu") ?? 0) * 25),
+      "Fri": prefs.getInt("${prefix}Fri_minutes") ?? ((prefs.getInt("${prefix}Fri") ?? 0) * 25),
+      "Sat": prefs.getInt("${prefix}Sat_minutes") ?? ((prefs.getInt("${prefix}Sat") ?? 0) * 25),
+      "Sun": prefs.getInt("${prefix}Sun_minutes") ?? ((prefs.getInt("${prefix}Sun") ?? 0) * 25),
     };
 
     // Load category study minutes
     _categoryMinutes = {
-      "study": prefs.getInt("cat_study") ?? 0,
-      "coding": prefs.getInt("cat_coding") ?? 0,
-      "writing": prefs.getInt("cat_writing") ?? 0,
-      "science": prefs.getInt("cat_science") ?? 0,
-      "meditation": prefs.getInt("cat_meditation") ?? 0,
+      "study": prefs.getInt("${prefix}cat_study") ?? 0,
+      "coding": prefs.getInt("${prefix}cat_coding") ?? 0,
+      "writing": prefs.getInt("${prefix}cat_writing") ?? 0,
+      "science": prefs.getInt("${prefix}cat_science") ?? 0,
+      "meditation": prefs.getInt("${prefix}cat_meditation") ?? 0,
     };
 
     // Load Focus History Map for Heatmap
-    final historyJson = prefs.getString("focus_history_map") ?? "";
+    final historyJson = prefs.getString("${prefix}focus_history_map") ?? "";
     if (historyJson.isNotEmpty) {
       try {
         final decoded = jsonDecode(historyJson) as Map<String, dynamic>;
@@ -187,13 +195,12 @@ class FocusController extends ChangeNotifier {
       for (int i = 0; i < 150; i++) {
         final date = now.subtract(Duration(days: i));
         final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-        // 45% chance of study sessions on any day, with 1 to 4 sessions
         if (random.nextDouble() < 0.45) {
           _historyMap[dateStr] = random.nextInt(4) + 1; // 1 to 4 sessions
         }
       }
       // Save it
-      await prefs.setString("focus_history_map", jsonEncode(_historyMap));
+      await prefs.setString("${prefix}focus_history_map", jsonEncode(_historyMap));
     }
 
     await checkInactivityDecay();
@@ -201,12 +208,40 @@ class FocusController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clearAndReload() async {
+    _timer?.cancel();
+    _isRunning = false;
+    _isBreak = false;
+    _totalSeconds = 1500;
+    _maxSeconds = 1500;
+    _configuredFocusSeconds = 1500;
+    _streak = 0;
+    _lastDate = "";
+    _xp = 0;
+    _level = 1;
+    _dailyStudyGoal = 240;
+    _lastDecayPenalty = 0;
+    _weeklyData = {
+      "Mon": 0, "Tue": 0, "Wed": 0, "Thu": 0, "Fri": 0, "Sat": 0, "Sun": 0
+    };
+    _weeklyMinutes = {
+      "Mon": 0, "Tue": 0, "Wed": 0, "Thu": 0, "Fri": 0, "Sat": 0, "Sun": 0
+    };
+    _categoryMinutes = {
+      "study": 0, "coding": 0, "writing": 0, "science": 0, "meditation": 0
+    };
+    _historyMap = {};
+    _isSoundscapeActive = false;
+    
+    await loadData();
+  }
+
   // Set selected Theme
   Future<void> setTheme(FocusTheme theme) async {
     _currentTheme = theme;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("focus_theme", theme.toString().split('.').last);
+    await prefs.setString("${_getPrefix()}focus_theme", theme.toString().split('.').last);
   }
 
   // Set selected Category
@@ -214,7 +249,7 @@ class FocusController extends ChangeNotifier {
     _currentCategory = category;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("focus_category", category.toString().split('.').last);
+    await prefs.setString("${_getPrefix()}focus_category", category.toString().split('.').last);
   }
 
   // Set Daily Study Goal in minutes
@@ -222,7 +257,7 @@ class FocusController extends ChangeNotifier {
     _dailyStudyGoal = minutes;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt("daily_study_goal", minutes);
+    await prefs.setInt("${_getPrefix()}daily_study_goal", minutes);
   }
 
   // Toggle ambient soundscapes
@@ -243,7 +278,7 @@ class FocusController extends ChangeNotifier {
     _isBreak = false;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt("configured_focus_seconds", _configuredFocusSeconds);
+    await prefs.setInt("${_getPrefix()}configured_focus_seconds", _configuredFocusSeconds);
   }
 
   // Start timer ticking
@@ -336,7 +371,7 @@ class FocusController extends ChangeNotifier {
     final catKey = _currentCategory.toString().split('.').last;
     _categoryMinutes[catKey] = (_categoryMinutes[catKey] ?? 0) + focusMinutes;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt("cat_$catKey", _categoryMinutes[catKey]!);
+    await prefs.setInt("${_getPrefix()}cat_$catKey", _categoryMinutes[catKey]!);
 
     final completionBonus = max(1, focusMinutes);
     await addXp(completionBonus);
@@ -352,7 +387,7 @@ class FocusController extends ChangeNotifier {
 
     final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
     _historyMap[todayStr] = (_historyMap[todayStr] ?? 0) + 1;
-    await prefs.setString("focus_history_map", jsonEncode(_historyMap));
+    await prefs.setString("${_getPrefix()}focus_history_map", jsonEncode(_historyMap));
   }
 
   // Start short break or focus break manually
@@ -366,10 +401,6 @@ class FocusController extends ChangeNotifier {
   }
 
   // Calculate required XP for a given level
-  // Level 1: 0 XP
-  // Level 2: 100 XP
-  // Level 3: 300 XP
-  // Level 4: 600 XP ... and so on (Formula: level * 200)
   int xpNeededForNextLevel() {
     return _level * 250;
   }
@@ -402,8 +433,8 @@ class FocusController extends ChangeNotifier {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt("focus_xp", _xp);
-    await prefs.setInt("focus_level", _level);
+    await prefs.setInt("${_getPrefix()}focus_xp", _xp);
+    await prefs.setInt("${_getPrefix()}focus_level", _level);
 
     if (levelChanged && amount > 0) {
       onLevelUp?.call();
@@ -437,8 +468,8 @@ class FocusController extends ChangeNotifier {
 
     _lastDate = today;
 
-    await prefs.setInt("streak", _streak);
-    await prefs.setString("lastDate", _lastDate);
+    await prefs.setInt("${_getPrefix()}streak", _streak);
+    await prefs.setString("${_getPrefix()}lastDate", _lastDate);
     notifyListeners();
     await syncToFirestore();
   }
@@ -479,10 +510,10 @@ class FocusController extends ChangeNotifier {
     final day = days[DateTime.now().weekday % 7];
 
     _weeklyData[day] = (_weeklyData[day] ?? 0) + 1;
-    await prefs.setInt(day, _weeklyData[day]!);
+    await prefs.setInt("${_getPrefix()}$day", _weeklyData[day]!);
 
     _weeklyMinutes[day] = (_weeklyMinutes[day] ?? 0) + completedMinutes;
-    await prefs.setInt("${day}_minutes", _weeklyMinutes[day]!);
+    await prefs.setInt("${_getPrefix()}${day}_minutes", _weeklyMinutes[day]!);
 
     notifyListeners();
   }
@@ -540,14 +571,14 @@ class FocusController extends ChangeNotifier {
         _lastDecayPenalty = penalty;
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt("streak", _streak);
+        await prefs.setInt("${_getPrefix()}streak", _streak);
 
         await addXp(-penalty);
 
         // Set lastDate to yesterday to avoid duplicate decay calculations on restarts
         final yesterday = today.subtract(const Duration(days: 1));
         _lastDate = "${yesterday.year}-${yesterday.month}-${yesterday.day}";
-        await prefs.setString("lastDate", _lastDate);
+        await prefs.setString("${_getPrefix()}lastDate", _lastDate);
       }
     } catch (e) {
       // safe fallback

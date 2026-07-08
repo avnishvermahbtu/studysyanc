@@ -1755,7 +1755,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildQuestsList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection("tasks").snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("tasks")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return DashboardCard(
@@ -1856,7 +1859,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     const Icon(Icons.star_rounded, size: 10, color: Colors.orange),
                                     const SizedBox(width: 2),
                                     Text(
-                                      task.recommendedBy.isNotEmpty ? task.recommendedBy : "Recommended",
+                                      task.recommendedBy.isNotEmpty ? task.recommendedBy : "Student Notice",
                                       style: const TextStyle(
                                         color: Colors.orange,
                                         fontSize: 8,
@@ -2442,6 +2445,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.pop(context); // close bottom sheet
                 
                 await FirebaseAuth.instance.signOut();
+                await FocusController().clearAndReload();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('student_name'); // Clear name cache
                 
@@ -2526,7 +2530,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection("bulletins").snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("bulletins")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+          .snapshots(),
       builder: (context, snapshot) {
         List<Map<String, dynamic>> notices = [];
         
@@ -2864,6 +2871,7 @@ class _BulletinCarouselState extends State<_BulletinCarousel> {
                         }
 
                         await FirebaseFirestore.instance.collection("bulletins").add({
+                          "userId": FirebaseAuth.instance.currentUser?.uid ?? "",
                           "title": titleController.text.trim(),
                           "content": contentController.text.trim(),
                           "teacher": teacherController.text.trim(),

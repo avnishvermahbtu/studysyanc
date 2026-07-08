@@ -285,6 +285,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
               onPressed: () async {
                 Navigator.pop(ctx);
                 await FirebaseAuth.instance.signOut();
+                await FocusController().clearAndReload();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('student_name');
                 

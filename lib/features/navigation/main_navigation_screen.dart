@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../ai_coach/ai_coach_screen.dart';
 import '../dashboard/screens/dashboard_screen.dart';
@@ -39,10 +40,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     _setupDefaultAgoraConfig();
     _setupDailyReminders();
 
+    // Reload FocusController data for the logged-in user
+    FocusController().loadData();
+
     // Setup real-time updates for native home screen widget
     FocusController().addListener(_onWidgetUpdate);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _tasksSubscription = FirebaseFirestore.instance.collection("tasks").snapshots().listen((event) {
+      _tasksSubscription = FirebaseFirestore.instance
+          .collection("tasks")
+          .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
+          .snapshots()
+          .listen((event) {
         _onWidgetUpdate();
       });
       // Trigger initial widget update

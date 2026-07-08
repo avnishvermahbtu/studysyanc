@@ -11,6 +11,8 @@ import '../tasks/screens/ai_service.dart';
 import 'roadmap_model.dart';
 import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
+import '../../core/utils/error_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RoadmapScreen extends StatefulWidget {
   const RoadmapScreen({super.key});
@@ -63,11 +65,17 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     super.dispose();
   }
 
+  String _getPrefix() {
+    final user = FirebaseAuth.instance.currentUser;
+    return user != null ? "${user.uid}_" : "guest_";
+  }
+
   // Load roadmaps and completion progress from SharedPreferences
   Future<void> _loadRoadmapData() async {
     final prefs = await SharedPreferences.getInstance();
+    final prefix = _getPrefix();
     
-    final savedJsonList = prefs.getStringList("saved_roadmaps") ?? [];
+    final savedJsonList = prefs.getStringList("${prefix}saved_roadmaps") ?? [];
     List<Roadmap> loadedRoadmaps = [];
     for (var jsonStr in savedJsonList) {
       try {
@@ -77,7 +85,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       }
     }
 
-    final activeTitle = prefs.getString("active_roadmap_title");
+    final activeTitle = prefs.getString("${prefix}active_roadmap_title");
     Roadmap? active;
     if (loadedRoadmaps.isNotEmpty) {
       if (activeTitle != null) {
@@ -93,7 +101,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     Set<String> completed = {};
     if (active != null) {
       completed = Set<String>.from(
-        prefs.getStringList("completed_tasks_${active.title}") ?? [],
+        prefs.getStringList("${prefix}completed_tasks_${active.title}") ?? [],
       );
     }
 
@@ -117,7 +125,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
         _completedTasks.add(taskId);
       }
     });
-    await prefs.setStringList("completed_tasks_${_activeRoadmap!.title}", _completedTasks.toList());
+    await prefs.setStringList("${_getPrefix()}completed_tasks_${_activeRoadmap!.title}", _completedTasks.toList());
 
     // Celebrate entire roadmap completion
     final totalTasksCount = _activeRoadmap!.milestones.fold<int>(0, (prev, element) => prev + element.tasks.length);
@@ -248,10 +256,10 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       updatedRoadmaps.insert(0, uniqueRoadmap);
 
       final jsonList = updatedRoadmaps.map((r) => r.toJson()).toList();
-      await prefs.setStringList("saved_roadmaps", jsonList);
+      await prefs.setStringList("${_getPrefix()}saved_roadmaps", jsonList);
       
-      await prefs.setString("active_roadmap_title", uniqueRoadmap.title);
-      await prefs.remove("completed_tasks_${uniqueRoadmap.title}");
+      await prefs.setString("${_getPrefix()}active_roadmap_title", uniqueRoadmap.title);
+      await prefs.remove("${_getPrefix()}completed_tasks_${uniqueRoadmap.title}");
 
       setState(() {
         _savedRoadmaps = updatedRoadmaps;
@@ -268,14 +276,9 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Failed to generate roadmap: ${e.toString()}"),
-          backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      if (mounted) {
+        showApiKeyErrorDialog(context, e);
+      }
     }
   }
 
@@ -305,17 +308,18 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       updatedRoadmaps.removeWhere((r) => r.title == deletedTitle);
       
       final jsonList = updatedRoadmaps.map((r) => r.toJson()).toList();
-      await prefs.setStringList("saved_roadmaps", jsonList);
-      await prefs.remove("completed_tasks_$deletedTitle");
+      final prefix = _getPrefix();
+      await prefs.setStringList("${prefix}saved_roadmaps", jsonList);
+      await prefs.remove("${prefix}completed_tasks_$deletedTitle");
 
       Roadmap? nextActive;
       Set<String> completed = {};
       if (updatedRoadmaps.isNotEmpty) {
         nextActive = updatedRoadmaps.first;
-        await prefs.setString("active_roadmap_title", nextActive.title);
-        completed = Set<String>.from(prefs.getStringList("completed_tasks_${nextActive.title}") ?? []);
+        await prefs.setString("${prefix}active_roadmap_title", nextActive.title);
+        completed = Set<String>.from(prefs.getStringList("${prefix}completed_tasks_${nextActive.title}") ?? []);
       } else {
-        await prefs.remove("active_roadmap_title");
+        await prefs.remove("${prefix}active_roadmap_title");
       }
 
       setState(() {
@@ -381,9 +385,10 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
                   ),
                   onSelected: (Roadmap selected) async {
                     final prefs = await SharedPreferences.getInstance();
-                    await prefs.setString("active_roadmap_title", selected.title);
+                    final prefix = _getPrefix();
+                    await prefs.setString("${prefix}active_roadmap_title", selected.title);
                     final completed = Set<String>.from(
-                      prefs.getStringList("completed_tasks_${selected.title}") ?? [],
+                      prefs.getStringList("${prefix}completed_tasks_${selected.title}") ?? [],
                     );
                     setState(() {
                       _activeRoadmap = selected;

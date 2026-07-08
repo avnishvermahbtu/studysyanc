@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Routine {
   String? id;
+  String userId;
   String title;
   String type;
   String location;
@@ -13,6 +14,7 @@ class Routine {
 
   Routine({
     this.id,
+    this.userId = "",
     required this.title,
     required this.type,
     required this.location,
@@ -25,6 +27,7 @@ class Routine {
 
   Map<String, dynamic> toMap() {
     return {
+      "userId": userId,
       "title": title,
       "type": type,
       "location": location,
@@ -48,6 +51,7 @@ class Routine {
 
     return Routine(
       id: docId,
+      userId: map['userId'] ?? '',
       title: map['title'] ?? '',
       type: map['type'] ?? 'Lecture',
       location: map['location'] ?? '',

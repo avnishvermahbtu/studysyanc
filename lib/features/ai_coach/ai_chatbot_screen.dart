@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:studysync/core/theme/theme_manager.dart';
 import '../../core/services/network_service.dart';
 import '../../core/services/tts_service.dart';
+import '../../core/utils/error_handler.dart';
 import 'ai_coach_message_card.dart';
 import 'ai_coach_service.dart';
 
@@ -219,38 +220,47 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
       _selectedImageFile = null;
     });
 
-    // Call API service
-    final reply = await _coachService.generateResponse(
-      prompt: promptToSend,
-      chatHistory: _chatHistory,
-      imageBytes: imgBytes,
-      mimeType: mimeType,
-    );
-
-    // Save dialogue exchange into chat history
-    if (imgBytes != null && mimeType != null) {
-      _chatHistory.add(
-        Content.multi([
-          DataPart(mimeType, imgBytes),
-          TextPart(promptToSend.isEmpty ? "Analyze this study material or solve this question." : promptToSend),
-        ]),
+    try {
+      // Call API service
+      final reply = await _coachService.generateResponse(
+        prompt: promptToSend,
+        chatHistory: _chatHistory,
+        imageBytes: imgBytes,
+        mimeType: mimeType,
       );
-    } else {
-      _chatHistory.add(Content.text(promptToSend));
+
+      // Save dialogue exchange into chat history
+      if (imgBytes != null && mimeType != null) {
+        _chatHistory.add(
+          Content.multi([
+            DataPart(mimeType, imgBytes),
+            TextPart(promptToSend.isEmpty ? "Analyze this study material or solve this question." : promptToSend),
+          ]),
+        );
+      } else {
+        _chatHistory.add(Content.text(promptToSend));
+      }
+      _chatHistory.add(Content.model([TextPart(reply)]));
+
+      // Update UI list with AI reply
+      setState(() {
+        _messages.add(
+          CoachMessage(
+            text: reply,
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        showApiKeyErrorDialog(context, e);
+      }
     }
-    _chatHistory.add(Content.model([TextPart(reply)]));
-
-    // Update UI list with AI reply
-    setState(() {
-      _messages.add(
-        CoachMessage(
-          text: reply,
-          isUser: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _isLoading = false;
-    });
 
     _scrollToBottom();
   }
