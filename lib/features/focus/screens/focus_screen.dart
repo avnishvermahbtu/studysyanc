@@ -11,6 +11,8 @@ import '../../../core/services/tts_service.dart';
 import '../../../core/services/dnd_service.dart';
 import '../../ai_coach/leaderboard_screen.dart';
 import '../../../core/services/ambient_sound_service.dart';
+import '../../../core/services/subscription_service.dart';
+
 
 class FocusScreen extends StatefulWidget {
   final bool isActive;
@@ -29,7 +31,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
   double _rainVol = 0.0;
   double _campfireVol = 0.0;
   bool _isDeepFocusMode = false;
-  bool _autoDndEnabled = false;
+  bool _autoDndEnabled = true;
   late AnimationController _breathingController;
   final List<String> _motivationalQuotes = [
     "Study now, be proud later. Your dream is worth it.",
@@ -81,7 +83,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _autoDndEnabled = prefs.getBool("auto_dnd_enabled") ?? false;
+        _autoDndEnabled = prefs.getBool("auto_dnd_enabled") ?? true;
       });
     }
   }
@@ -163,8 +165,22 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
       _syncAmbientSounds();
       if (_controller.isRunning) {
         WakelockPlus.enable();
+        if (_autoDndEnabled) {
+          DNDService.isPermissionGranted().then((granted) {
+            if (granted) {
+              DNDService.setDND(true);
+            } else {
+              if (mounted) {
+                _showDndExplanationDialog();
+              }
+            }
+          });
+        }
       } else {
         WakelockPlus.disable();
+        if (_autoDndEnabled) {
+          DNDService.setDND(false);
+        }
       }
       setState(() {});
     }
@@ -221,10 +237,6 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
     
     // Save successfully grown tree
     _saveGrownTreeToGarden();
-    WakelockPlus.disable();
-    if (_autoDndEnabled) {
-      DNDService.setDND(false);
-    }
     
     final focusMinutes = _controller.lastCompletedFocusMinutes;
     final earnedXp = focusMinutes * 2;
@@ -357,10 +369,6 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
         _isTreeDead = true;
       });
       _controller.resetTimer();
-      WakelockPlus.disable();
-      if (_autoDndEnabled) {
-        DNDService.setDND(false);
-      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -458,6 +466,9 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
+        
+
+        
         _controller.setTheme(theme);
       },
       child: AnimatedContainer(
@@ -1541,19 +1552,11 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
                 HapticFeedback.mediumImpact();
                 if (_controller.isRunning) {
                   _controller.pauseTimer();
-                  WakelockPlus.disable();
-                  if (_autoDndEnabled) {
-                    DNDService.setDND(false);
-                  }
                 } else {
                   setState(() {
                     _isTreeDead = false;
                   });
                   _controller.startTimer();
-                  WakelockPlus.enable();
-                  if (_autoDndEnabled) {
-                    DNDService.setDND(true);
-                  }
                 }
               },
               child: Container(
@@ -1587,10 +1590,6 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
                 HapticFeedback.lightImpact();
                 _confirmCancelSession(() {
                   _controller.resetTimer();
-                  WakelockPlus.disable();
-                  if (_autoDndEnabled) {
-                    DNDService.setDND(false);
-                  }
                   setState(() {
                     _isTreeDead = true;
                   });
@@ -1768,6 +1767,8 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
               volume: _rainVol,
               activeColor: Colors.cyanAccent,
               onChanged: (val) {
+
+                
                 setState(() {
                   _rainVol = val;
                   if (val > 0 && !_controller.isSoundscapeActive) {
@@ -1788,6 +1789,8 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
               volume: _campfireVol,
               activeColor: Colors.amberAccent,
               onChanged: (val) {
+
+                
                 setState(() {
                   _campfireVol = val;
                   if (val > 0 && !_controller.isSoundscapeActive) {

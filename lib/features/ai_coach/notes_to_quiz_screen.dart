@@ -13,6 +13,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import '../tasks/screens/ai_service.dart';
 import '../focus/controller/focus_controller.dart';
 import '../dashboard/widgets/offline_banner.dart';
+import '../../core/services/subscription_service.dart';
+
 import '../../core/services/network_service.dart';
 import 'quiz_revision_service.dart';
 import '../../core/utils/error_handler.dart';
@@ -261,6 +263,8 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
       return;
     }
 
+
+
     final hasInternet = await NetworkService().hasInternet();
     if (!mounted) return;
     if (!hasInternet) {
@@ -302,6 +306,7 @@ class _NotesToQuizScreenState extends State<NotesToQuizScreen> {
         jsonResponse = await _aiService.generateQuiz(notes, _questionCount, _difficulty);
       }
       _loadingTimer?.cancel();
+      await SubscriptionService().incrementUsage("quiz");
 
       if (jsonResponse.isEmpty) {
         throw Exception("Empty response from API");

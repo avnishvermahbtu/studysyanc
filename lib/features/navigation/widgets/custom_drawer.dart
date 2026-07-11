@@ -7,12 +7,15 @@ import 'package:studysync/core/theme/theme_manager.dart';
 import 'package:studysync/features/focus/controller/focus_controller.dart';
 import 'package:studysync/login_page.dart';
 
+import '../../../core/services/subscription_service.dart';
+
 import '../../ai_coach/roadmap_screen.dart';
 import '../../ai_coach/backlog_screen.dart';
 import '../../ai_coach/notes_to_quiz_screen.dart';
 import '../../ai_coach/quiz_revision_screen.dart';
 import '../../routine/screens/feynman_trainer_screen.dart';
 import '../../ai_coach/leaderboard_screen.dart';
+import '../../flashcards/screens/deck_list_screen.dart';
 
 class CustomDrawer extends StatefulWidget {
   final Function(int) onNavigate;
@@ -36,13 +39,21 @@ class _CustomDrawerState extends State<CustomDrawer> {
     super.initState();
     _focusController = FocusController();
     _focusController.addListener(_onFocusUpdate);
+    SubscriptionService().addListener(_onSubscriptionUpdate);
     _loadStudentData();
   }
 
   @override
   void dispose() {
     _focusController.removeListener(_onFocusUpdate);
+    SubscriptionService().removeListener(_onSubscriptionUpdate);
     super.dispose();
+  }
+
+  void _onSubscriptionUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onFocusUpdate() {
@@ -68,6 +79,21 @@ class _CustomDrawerState extends State<CustomDrawer> {
       }
     } catch (e) {
       debugPrint("Error loading student data in drawer: $e");
+    }
+  }
+
+  Future<void> _saveProfileInBackground(String newName, String tempAvatar) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.updateDisplayName(newName);
+        await user.reload();
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('student_name', newName);
+      await prefs.setString('student_avatar', tempAvatar);
+    } catch (e) {
+      debugPrint("Error saving profile in background: $e");
     }
   }
 
@@ -208,18 +234,10 @@ class _CustomDrawerState extends State<CustomDrawer> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: () async {
+                      onPressed: () {
                         final newName = nameEditController.text.trim();
                         if (newName.isNotEmpty) {
-                          final user = FirebaseAuth.instance.currentUser;
-                          if (user != null) {
-                            await user.updateDisplayName(newName);
-                            await user.reload();
-                          }
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('student_name', newName);
-                          await prefs.setString('student_avatar', tempAvatar);
-                          
+                          // Update local state immediately for instant feedback
                           if (mounted) {
                             setState(() {
                               _studentName = newName;
@@ -227,9 +245,14 @@ class _CustomDrawerState extends State<CustomDrawer> {
                             });
                           }
                           _focusController.notifyListeners();
-                        }
-                        if (stateContext.mounted) {
-                          Navigator.pop(stateContext);
+
+                          // Close the sheet immediately
+                          Navigator.pop(sheetContext);
+
+                          // Perform Firebase and SharedPreferences updates in the background
+                          _saveProfileInBackground(newName, tempAvatar);
+                        } else {
+                          Navigator.pop(sheetContext);
                         }
                       },
                       child: const Text(
@@ -286,6 +309,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 Navigator.pop(ctx);
                 await FirebaseAuth.instance.signOut();
                 await FocusController().clearAndReload();
+                await SubscriptionService().init();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('student_name');
                 
@@ -460,6 +484,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                             ),
                           ),
                         ),
+
                       ],
                     ),
                   ],
@@ -472,6 +497,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Column(
                     children: [
+
                       _buildDrawerItem(
                         icon: Icons.dashboard_rounded,
                         title: "Home Dashboard",
@@ -560,6 +586,14 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         onTap: () {
                           Navigator.pop(context);
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const QuizRevisionScreen()));
+                        },
+                      ),
+                      _buildDrawerItem(
+                        icon: Icons.amp_stories_rounded,
+                        title: "Smart Flashcards",
+                        onTap: () {
+                          Navigator.pop(context);
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const DeckListScreen()));
                         },
                       ),
                     ],

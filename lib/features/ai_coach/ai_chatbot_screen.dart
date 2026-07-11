@@ -11,6 +11,8 @@ import '../../core/services/tts_service.dart';
 import '../../core/utils/error_handler.dart';
 import 'ai_coach_message_card.dart';
 import 'ai_coach_service.dart';
+import '../../core/services/subscription_service.dart';
+
 
 class AIChatbotScreen extends StatefulWidget {
   const AIChatbotScreen({super.key});
@@ -177,6 +179,8 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
 
     if (text.isEmpty && !hasImage) return;
 
+
+
     final hasInternet = await NetworkService().hasInternet();
     if (!hasInternet) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -228,6 +232,9 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         imageBytes: imgBytes,
         mimeType: mimeType,
       );
+
+      // Increment usage count locally on success
+      await SubscriptionService().incrementUsage("chat");
 
       // Save dialogue exchange into chat history
       if (imgBytes != null && mimeType != null) {

@@ -9,10 +9,45 @@ import '../../ai_coach/diagnostic_flow/diagnostic_model.dart';
 
 class AIService {
   static const apiKey = geminiApiKey;
-  final model = GenerativeModel(
-    model: 'gemini-2.5-flash',
+  final _primaryModel = GenerativeModel(
+    model: 'gemini-3.5-flash',
     apiKey: apiKey,
   );
+
+  final _backupModel = GenerativeModel(
+    model: 'gemini-1.5-flash',
+    apiKey: apiKey,
+  );
+
+  GenerativeModel get model => _primaryModel;
+
+  Future<GenerateContentResponse> _generateContentWithFallback(
+    List<Content> contents, {
+    GenerationConfig? generationConfig,
+  }) async {
+    try {
+      return await _primaryModel.generateContent(contents, generationConfig: generationConfig);
+    } catch (e) {
+      final errStr = e.toString().toLowerCase();
+      final isTransient = errStr.contains("503") ||
+          errStr.contains("429") ||
+          errStr.contains("overloaded") ||
+          errStr.contains("resource exhausted") ||
+          errStr.contains("unavailable");
+
+      if (isTransient) {
+        print("Primary model 'gemini-3.5-flash' overloaded or rate-limited. Trying backup model 'gemini-1.5-flash'...");
+        try {
+          await Future.delayed(const Duration(milliseconds: 500));
+          return await _backupModel.generateContent(contents, generationConfig: generationConfig);
+        } catch (backupErr) {
+          print("Backup model also failed: $backupErr");
+          rethrow;
+        }
+      }
+      rethrow;
+    }
+  }
 
   Future<String> getPriority(
     String title,
@@ -34,7 +69,7 @@ High
 Medium
 Low
 """;
-    final response = await model.generateContent(
+    final response = await _generateContentWithFallback(
       [Content.text(prompt)],
     );
     return response.text?.trim() ?? "Medium";
@@ -61,7 +96,7 @@ Example response format:
 ["Read NCERT pages 45-48 summary", "Solve 10 practice MCQs in workbook", "Verify incorrect answers in answer key"]
 """;
     try {
-      final response = await model.generateContent(
+      final response = await _generateContentWithFallback(
         [Content.text(prompt)],
       );
       final responseText = response.text?.trim() ?? "";
@@ -117,7 +152,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 """;
 
     try {
-      final response = await model.generateContent(
+      final response = await _generateContentWithFallback(
         [Content.text(prompt)],
         generationConfig: GenerationConfig(responseMimeType: 'application/json'),
       );
@@ -168,7 +203,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 """;
 
     try {
-      final response = await model.generateContent(
+      final response = await _generateContentWithFallback(
         [Content.text(prompt)],
         generationConfig: GenerationConfig(responseMimeType: 'application/json'),
       );
@@ -211,7 +246,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 """;
 
     try {
-      final response = await model.generateContent(
+      final response = await _generateContentWithFallback(
         [
           Content.multi([
             DataPart('application/pdf', Uint8List.fromList(pdfBytes)),
@@ -253,7 +288,7 @@ Write a very brief, high-impact coaching advice (maximum 3 sentences). Do not in
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       return response.text?.trim() ?? "Ready to conquer today's study block? Pick a task, start focus zone, and let's crush it! ⚡";
     } catch (e) {
       return "Ready to conquer today's study block? Pick a task, start focus zone, and let's crush it! ⚡";
@@ -311,7 +346,7 @@ Keep the final recommendation under 3 sentences. Use energetic, direct, and supp
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       return response.text?.trim() ?? "Ready to recover? Pick your highest priority backlog chapter, set the timer, and let's clear it! 🚀";
     } catch (e) {
       return "Ready to recover? Pick your highest priority backlog chapter, set the timer, and let's clear it! 🚀";
@@ -346,7 +381,7 @@ Return ONLY the raw valid JSON array. Do not include markdown code block syntax 
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       final text = response.text?.trim() ?? "";
       if (text.isEmpty) {
         return _fallbackSplits(chapter);
@@ -422,7 +457,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       final text = response.text?.trim() ?? "";
       if (text.isEmpty) return _fallbackQuestions(exam, difficulty);
 
@@ -476,7 +511,7 @@ Return ONLY the raw valid JSON. Do not include markdown syntax, explainers, or e
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       final text = response.text?.trim() ?? "";
       if (text.isEmpty) return generateSelectionReportOffline(exam: exam, results: testResults);
 
@@ -520,7 +555,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       final text = response.text?.trim() ?? "";
       if (text.isEmpty) return _generateOfflineTimetable(exam, weakTopics);
 
@@ -983,7 +1018,7 @@ Schema:
 """;
 
     try {
-      final response = await model.generateContent([Content.text(prompt)]);
+      final response = await _generateContentWithFallback([Content.text(prompt)]);
       final text = response.text?.trim() ?? "";
       if (text.isEmpty) {
         throw Exception("Empty response from AI");

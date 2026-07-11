@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:studysync/features/group_study/screens/auto_join_screen.dart';
+import 'package:studysync/core/services/subscription_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -281,6 +282,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         Navigator.pop(context); // Dismiss loading loader
         await FocusController().clearAndReload();
+        await SubscriptionService().init();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it
@@ -364,6 +366,7 @@ class _LoginPageState extends State<LoginPage> {
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
         await FocusController().clearAndReload();
+        await SubscriptionService().init();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it

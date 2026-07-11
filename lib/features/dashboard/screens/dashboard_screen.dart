@@ -12,6 +12,7 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 
 import '../../tasks/models/task_model.dart';
 import '../../focus/controller/focus_controller.dart';
+import '../../../core/services/subscription_service.dart';
 import '../widgets/dashboard_card.dart';
 import '../../ai_coach/roadmap_screen.dart';
 import '../../ai_coach/backlog_screen.dart';
@@ -23,6 +24,7 @@ import '../../ai_coach/ai_chatbot_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import '../../routine/screens/feynman_trainer_screen.dart';
 import '../../group_study/screens/group_study_lobby_screen.dart';
+import '../../flashcards/screens/deck_list_screen.dart';
 import 'package:studysync/core/theme/theme_manager.dart';
 import 'package:flutter/services.dart';
 
@@ -1996,6 +1998,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIChatbotScreen())),
         "color": const Color(0xffa855f7),
       },
+      {
+        "icon": Icons.amp_stories_outlined,
+        "title": "Smart Flashcards",
+        "subtitle": "Spaced Revision",
+        "onTap": () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeckListScreen())),
+        "color": const Color(0xffec4899),
+      },
     ];
 
     return AnimationLimiter(
@@ -2446,6 +2455,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 
                 await FirebaseAuth.instance.signOut();
                 await FocusController().clearAndReload();
+                await SubscriptionService().init();
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.remove('student_name'); // Clear name cache
                 

@@ -11,6 +11,7 @@ import 'package:studysync/firebase_options.dart';
 import 'package:studysync/features/group_study/screens/auto_join_screen.dart';
 import 'package:studysync/core/theme/theme_manager.dart';
 import 'package:studysync/core/services/notification_service.dart';
+import 'package:studysync/core/services/subscription_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,9 @@ void main() async {
 
   // Initialize theme manager configuration
   await ThemeManager.init();
+
+  // Initialize subscription and daily limits tracker
+  await SubscriptionService().init();
 
   // Explicitly enable offline support & local caching for Firestore
   try {

@@ -17,8 +17,15 @@ class FocusController extends ChangeNotifier {
   static final FocusController _instance = FocusController._internal();
   factory FocusController() => _instance;
 
+  Future<void>? _loadFuture;
+
+  Future<void> ensureLoaded() {
+    _loadFuture ??= loadData();
+    return _loadFuture!;
+  }
+
   FocusController._internal() {
-    loadData();
+    ensureLoaded();
   }
 
   // Timer State
@@ -127,7 +134,10 @@ class FocusController extends ChangeNotifier {
     _level = prefs.getInt("${prefix}focus_level") ?? 1;
     _dailyStudyGoal = prefs.getInt("${prefix}daily_study_goal") ?? 240;
     
-    final configuredSec = prefs.getInt("${prefix}configured_focus_seconds") ?? 1500;
+    int configuredSec = prefs.getInt("${prefix}configured_focus_seconds") ?? 1500;
+    if (configuredSec <= 0) {
+      configuredSec = 1500;
+    }
     _configuredFocusSeconds = configuredSec;
     _maxSeconds = configuredSec;
     _totalSeconds = configuredSec;
@@ -205,6 +215,128 @@ class FocusController extends ChangeNotifier {
 
     await checkInactivityDecay();
 
+    // Fetch from Firestore if logged in
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final userDoc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+        if (userDoc.exists) {
+          final data = userDoc.data();
+          if (data != null) {
+            int cloudXp = data['xp'] as int? ?? 0;
+            int cloudLevel = data['level'] as int? ?? 1;
+            int cloudStreak = data['streak'] as int? ?? 0;
+
+            // Check if the user document was wiped to 0 (or is brand new but they already have completed tasks).
+            // If they have completed tasks in Firestore, but their cloud XP is 0 and level is 1:
+            // We can reconstruct their XP!
+            if (cloudXp == 0 && cloudLevel == 1) {
+              final tasksSnapshot = await FirebaseFirestore.instance
+                  .collection("tasks")
+                  .where("userId", isEqualTo: user.uid)
+                  .get();
+                  
+              int totalReconstructedXp = 0;
+              bool hasCompletedTasks = false;
+
+              for (var doc in tasksSnapshot.docs) {
+                final taskData = doc.data();
+                final isDone = taskData['isDone'] as bool? ?? false;
+                final xpAwarded = taskData['xpAwarded'] as bool? ?? false;
+                final priority = taskData['priority'] as String? ?? '';
+                
+                // Reconstruction rule
+                if (isDone || xpAwarded) {
+                  hasCompletedTasks = true;
+                  int taskXp = 15; // default Low
+                  if (priority == "High") {
+                    taskXp = 50;
+                  } else if (priority == "Medium") {
+                    taskXp = 30;
+                  }
+                  totalReconstructedXp += taskXp;
+                }
+
+                // Check subtasks
+                final subtasksRaw = taskData['subtasks'] as List<dynamic>?;
+                if (subtasksRaw != null) {
+                  for (var subRaw in subtasksRaw) {
+                    if (subRaw is Map) {
+                      final subDone = subRaw['isDone'] as bool? ?? false;
+                      final subXpAwarded = subRaw['xpAwarded'] as bool? ?? false;
+                      if (subDone || subXpAwarded) {
+                        totalReconstructedXp += 5; // 5 XP per completed subtask
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (hasCompletedTasks && totalReconstructedXp > 0) {
+                // We successfully reconstructed! Let's compute level and remaining XP.
+                int level = 1;
+                int remainingXp = totalReconstructedXp;
+                int needed = level * 250;
+                while (remainingXp >= needed) {
+                  remainingXp -= needed;
+                  level++;
+                  needed = level * 250;
+                }
+
+                cloudXp = remainingXp;
+                cloudLevel = level;
+                debugPrint("StudySync XP Reconstructed: Level $cloudLevel, XP $cloudXp from tasks.");
+              }
+            }
+
+            // Sync cloud values (reconstructed or original) back to SharedPreferences and local state
+            bool updated = false;
+
+            final localXpVal = prefs.getInt("${prefix}focus_xp");
+            if (localXpVal == null || cloudXp > _xp || (localXpVal == 0 && cloudXp > 0)) {
+              _xp = cloudXp;
+              await prefs.setInt("${prefix}focus_xp", _xp);
+              updated = true;
+            }
+
+            final localLevelVal = prefs.getInt("${prefix}focus_level");
+            if (localLevelVal == null || cloudLevel > _level || (localLevelVal == 1 && cloudLevel > 1)) {
+              _level = cloudLevel;
+              await prefs.setInt("${prefix}focus_level", _level);
+              updated = true;
+            }
+
+            final localStreakVal = prefs.getInt("${prefix}streak");
+            if (localStreakVal == null || cloudStreak > _streak || (localStreakVal == 0 && cloudStreak > 0)) {
+              _streak = cloudStreak;
+              await prefs.setInt("${prefix}streak", _streak);
+              updated = true;
+            }
+
+            // Check if local is higher than cloud (e.g., offline updates), which requires syncing to cloud
+            bool needsSyncToCloud = false;
+            if (_xp > cloudXp || _level > cloudLevel || _streak > cloudStreak) {
+              needsSyncToCloud = true;
+            }
+
+            if (updated) {
+              notifyListeners();
+            }
+
+            if (needsSyncToCloud) {
+              // Non-blocking sync to cloud
+              syncToFirestore();
+            }
+          }
+        } else {
+          // Document does not exist in Firestore - create it with local values
+          syncToFirestore();
+        }
+      } catch (e) {
+        debugPrint("Failed to load and sync user data from Firestore: $e");
+      }
+    }
+
     notifyListeners();
   }
 
@@ -233,7 +365,8 @@ class FocusController extends ChangeNotifier {
     _historyMap = {};
     _isSoundscapeActive = false;
     
-    await loadData();
+    _loadFuture = loadData();
+    await _loadFuture;
   }
 
   // Set selected Theme
@@ -272,7 +405,11 @@ class FocusController extends ChangeNotifier {
   // Set Timer values
   Future<void> setTimerDuration(int minutes, int seconds) async {
     if (_isRunning) return;
-    _maxSeconds = (minutes * 60) + seconds;
+    int targetSeconds = (minutes * 60) + seconds;
+    if (targetSeconds <= 0) {
+      targetSeconds = 1500; // Safe default to 25 minutes
+    }
+    _maxSeconds = targetSeconds;
     _totalSeconds = _maxSeconds;
     _configuredFocusSeconds = _maxSeconds;
     _isBreak = false;
@@ -344,6 +481,7 @@ class FocusController extends ChangeNotifier {
   }
 
   Future<void> completeSession() async {
+    await ensureLoaded();
     NotificationService().cancelFocusCompletionNotification();
     if (_isBreak) {
       // Break is complete. Switch back to focus state
@@ -407,6 +545,7 @@ class FocusController extends ChangeNotifier {
 
   // XP addition and level-up/down wraps
   Future<void> addXp(int amount) async {
+    await ensureLoaded();
     _xp += amount;
     
     bool levelChanged = false;
@@ -445,6 +584,7 @@ class FocusController extends ChangeNotifier {
 
   // Update Streak counts
   Future<void> updateStreak() async {
+    await ensureLoaded();
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
     final today = "${now.year}-${now.month}-${now.day}";
@@ -476,6 +616,7 @@ class FocusController extends ChangeNotifier {
 
   // Sync user metrics dynamically to global leaderboard collection
   Future<void> syncToFirestore() async {
+    await ensureLoaded();
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -505,6 +646,7 @@ class FocusController extends ChangeNotifier {
 
   // Update Weekly Completion stats
   Future<void> updateWeekly(int completedMinutes) async {
+    await ensureLoaded();
     final prefs = await SharedPreferences.getInstance();
     final days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     final day = days[DateTime.now().weekday % 7];

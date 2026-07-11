@@ -13,6 +13,7 @@ import '../group_study/screens/group_study_lobby_screen.dart';
 import '../ai_coach/leaderboard_screen.dart';
 import '../../core/services/widget_service.dart';
 import '../focus/controller/focus_controller.dart';
+import '../../core/services/subscription_service.dart';
 import 'package:studysync/core/theme/theme_manager.dart';
 import 'widgets/custom_drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +43,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     // Reload FocusController data for the logged-in user
     FocusController().loadData();
+
+    // Reload Subscription and limits data for the logged-in user
+    SubscriptionService().init();
 
     // Setup real-time updates for native home screen widget
     FocusController().addListener(_onWidgetUpdate);

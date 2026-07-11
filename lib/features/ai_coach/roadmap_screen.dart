@@ -13,6 +13,8 @@ import '../dashboard/widgets/offline_banner.dart';
 import '../../core/services/network_service.dart';
 import '../../core/utils/error_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../core/services/subscription_service.dart';
+
 
 class RoadmapScreen extends StatefulWidget {
   const RoadmapScreen({super.key});
@@ -202,6 +204,8 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
       return;
     }
 
+
+
     final hasInternet = await NetworkService().hasInternet();
     if (!hasInternet) {
       setState(() {
@@ -230,6 +234,7 @@ class _RoadmapScreenState extends State<RoadmapScreen> {
     try {
       final jsonResponse = await _aiService.generateRoadmap(topic, timeline);
       _loadingTimer?.cancel();
+      await SubscriptionService().incrementUsage("roadmap");
 
       if (jsonResponse.isEmpty) {
         throw Exception("Empty response received from API");
