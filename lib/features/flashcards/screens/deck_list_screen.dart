@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../models/deck_model.dart';
 import 'deck_editor_screen.dart';
 import 'flashcard_study_screen.dart';
+import 'leitner_cabinet_screen.dart';
 
 class DeckListScreen extends StatefulWidget {
   const DeckListScreen({super.key});
@@ -877,6 +878,27 @@ class _DeckListScreenState extends State<DeckListScreen> {
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      IconButton(
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: Colors.white.withOpacity(0.05),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                          padding: const EdgeInsets.all(12),
+                                        ),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => LeitnerCabinetScreen(deck: deck),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.inventory_2_rounded,
+                                          color: Colors.white60,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
                                       IconButton(
                                         style: IconButton.styleFrom(
                                           backgroundColor: Colors.white.withOpacity(0.05),

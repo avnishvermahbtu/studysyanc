@@ -26,7 +26,7 @@ class GroupStudyRoomScreen extends StatefulWidget {
   State<GroupStudyRoomScreen> createState() => _GroupStudyRoomScreenState();
 }
 
-class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
+class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with WidgetsBindingObserver {
   final _chatController = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -91,6 +91,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final user = FirebaseAuth.instance.currentUser;
     _myId = user?.uid ?? 'anonymous_uid';
     _myName = user?.displayName ?? 'Anonymous Student';
@@ -99,10 +100,12 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
     _setupRoomSync();
     _initAudioCall();
     _setupReactionsSync();
+    _updateMyMemberState(status: 'studying');
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _roomSubscription?.cancel();
     _annotationsSubscription?.cancel();
     _reactionsSubscription?.cancel();
@@ -111,6 +114,43 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
     _scrollController.dispose();
     _cleanupAgora();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _updateMyMemberState(status: 'sleeping');
+    } else if (state == AppLifecycleState.resumed) {
+      _updateMyMemberState(status: 'studying');
+    }
+  }
+
+  Future<void> _updateMyMemberState({String? avatarType, String? status, bool? isMuted}) async {
+    try {
+      final docRef = _db.collection('study_rooms').doc(widget.roomId);
+      await _db.runTransaction((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        if (!snapshot.exists) return;
+        final room = StudyRoom.fromMap(snapshot.data() as Map<String, dynamic>);
+        final updatedMembers = room.members.map((m) {
+          if (m.uid == _myId) {
+            return StudyRoomMember(
+              uid: m.uid,
+              name: m.name,
+              isMuted: isMuted ?? m.isMuted,
+              avatarType: avatarType ?? m.avatarType,
+              status: status ?? m.status,
+            );
+          }
+          return m;
+        }).toList();
+        transaction.update(docRef, {
+          'members': updatedMembers.map((m) => m.toMap()).toList(),
+        });
+      });
+    } catch (e) {
+      if (kDebugMode) print("Error updating member state: $e");
+    }
   }
 
   // Clean exit for members when back button is tapped
@@ -293,23 +333,16 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  CircleAvatar(
-                                    backgroundColor: isHandRaised
-                                        ? Colors.orangeAccent.withOpacity(0.2)
-                                        : (isHost
-                                            ? const Color(0xff6366f1).withOpacity(0.2)
-                                            : (hasDrawRights ? const Color(0xff10b981).withOpacity(0.2) : Colors.white.withOpacity(0.05))),
-                                    child: Icon(
-                                      isHandRaised
-                                          ? Icons.front_hand_rounded
-                                          : (isHost
-                                              ? Icons.school_rounded
-                                              : (hasDrawRights ? Icons.gesture_rounded : Icons.person_rounded)),
-                                      color: isHandRaised
-                                          ? Colors.orangeAccent
-                                          : (isHost
-                                              ? const Color(0xffa5b4fc)
-                                              : (hasDrawRights ? const Color(0xff34d399) : Colors.white70)),
+                                  SizedBox(
+                                    width: 48,
+                                    height: 52,
+                                    child: Center(
+                                      child: StudyAvatarWidget(
+                                        avatarType: member.avatarType,
+                                        status: member.status,
+                                        size: 34,
+                                        userName: "", // Username is shown next to it
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 14),
@@ -327,9 +360,10 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                                         ),
                                         const SizedBox(height: 3),
                                         Text(
-                                          isHost
-                                              ? "Host / Presenter"
-                                              : (hasDrawRights ? "Collaboration Enabled (Draw)" : "Student / Listener"),
+                                          "${member.status == 'studying' ? 'Studying ✍️' : (member.status == 'sleeping' ? 'Sleeping 💤' : 'Away 🚶')} • " +
+                                              (isHost
+                                                  ? "Host"
+                                                  : (hasDrawRights ? "Presenter" : "Student")),
                                           style: TextStyle(
                                             color: isHost
                                                 ? const Color(0xffa5b4fc)
@@ -521,7 +555,13 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
           if (m.uid == room.hostId) {
             return m; // Don't mute the host
           }
-          return StudyRoomMember(uid: m.uid, name: m.name, isMuted: true);
+          return StudyRoomMember(
+            uid: m.uid,
+            name: m.name,
+            isMuted: true,
+            avatarType: m.avatarType,
+            status: m.status,
+          );
         }).toList();
         await _db.collection('study_rooms').doc(widget.roomId).update({
           'members': updatedMembers.map((m) => m.toMap()).toList(),
@@ -548,7 +588,13 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
       if (doc.exists) {
         final room = StudyRoom.fromMap(doc.data() as Map<String, dynamic>);
         List<StudyRoomMember> updatedMembers = room.members.map((m) {
-          return StudyRoomMember(uid: m.uid, name: m.name, isMuted: false);
+          return StudyRoomMember(
+            uid: m.uid,
+            name: m.name,
+            isMuted: false,
+            avatarType: m.avatarType,
+            status: m.status,
+          );
         }).toList();
         await _db.collection('study_rooms').doc(widget.roomId).update({
           'members': updatedMembers.map((m) => m.toMap()).toList(),
@@ -774,6 +820,243 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showAvatarSelectorDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return StreamBuilder<DocumentSnapshot>(
+          stream: _db.collection('study_rooms').doc(widget.roomId).snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const SizedBox.shrink();
+            }
+            final room = StudyRoom.fromMap(snapshot.data!.data() as Map<String, dynamic>);
+            final myMember = room.members.firstWhere((m) => m.uid == _myId, orElse: () => StudyRoomMember(uid: "", name: ""));
+            final currentAvatar = myMember.uid.isNotEmpty ? myMember.avatarType : 'coder';
+
+            final avatars = [
+              {'type': 'coder', 'name': 'Code Wizard 👨‍💻', 'desc': 'Unlocks keyboard, code snippets, and lightning bugs.'},
+              {'type': 'bookworm', 'name': 'Bookworm 📖', 'desc': 'Unlocks paper pages, pencils, and graduation hats.'},
+              {'type': 'panda', 'name': 'Focus Panda 🐼', 'desc': 'Unlocks green bamboo, animal tracks, and cozy vibes.'},
+              {'type': 'coffee', 'name': 'Coffee Lover ☕', 'desc': 'Unlocks hot steaming cups, cookies, and relaxing aura.'},
+              {'type': 'cat', 'name': 'Chill Cat 🐱', 'desc': 'Unlocks rolling yarn, paw tracks, and sleeping mode.'},
+            ];
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.65,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xff090d16),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(28),
+                      topRight: Radius.circular(28),
+                    ),
+                    border: Border(
+                      top: BorderSide(color: Colors.white10, width: 1.5),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Row(
+                        children: [
+                          Icon(Icons.face_retouching_natural_rounded, color: Color(0xff6366f1)),
+                          SizedBox(width: 10),
+                          Text(
+                            "Customize Your Study Avatar",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "Pick an avatar that matches your style. Your avatar will be shown to other members in the study hall in real-time!",
+                        style: TextStyle(color: Colors.white38, fontSize: 11, height: 1.4),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: avatars.length,
+                          itemBuilder: (context, index) {
+                            final av = avatars[index];
+                            final isSelected = av['type'] == currentAvatar;
+                            return InkWell(
+                              onTap: () {
+                                _updateMyMemberState(avatarType: av['type']);
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Avatar updated to ${av['name']}!"),
+                                    behavior: SnackBarBehavior.floating,
+                                    backgroundColor: const Color(0xff6366f1),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xff6366f1).withOpacity(0.1) : Colors.white.withOpacity(0.01),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xff6366f1) : Colors.white10,
+                                    width: isSelected ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 45,
+                                      height: 45,
+                                      child: ClipOval(
+                                        child: _buildAvatarPlaceholder(av['type']!),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            av['name']!,
+                                            style: TextStyle(
+                                              color: isSelected ? Colors.white : Colors.white70,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            av['desc']!,
+                                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Icon(Icons.check_circle_rounded, color: Color(0xff6366f1), size: 20),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAvatarPlaceholder(String type) {
+    switch (type) {
+      case 'bookworm':
+        return Container(
+          color: const Color(0xff064e3b),
+          child: const Icon(Icons.menu_book_rounded, color: Color(0xff6ee7b7), size: 22),
+        );
+      case 'panda':
+        return Container(
+          color: const Color(0xff1e293b),
+          child: const Center(child: Text("🐼", style: TextStyle(fontSize: 20))),
+        );
+      case 'coffee':
+        return Container(
+          color: const Color(0xff78350f),
+          child: const Icon(Icons.coffee_rounded, color: Color(0xfffcd34d), size: 22),
+        );
+      case 'cat':
+        return Container(
+          color: const Color(0xff881337),
+          child: const Center(child: Text("🐱", style: TextStyle(fontSize: 20))),
+        );
+      case 'coder':
+      default:
+        return Container(
+          color: const Color(0xff312e81),
+          child: const Icon(Icons.code_rounded, color: Color(0xff818cf8), size: 22),
+        );
+    }
+  }
+
+  Widget _buildHorizontalActiveAvatars() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _db.collection('study_rooms').doc(widget.roomId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox.shrink();
+        }
+        final room = StudyRoom.fromMap(snapshot.data!.data() as Map<String, dynamic>);
+        return Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.015),
+            border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xff6366f1).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.people_alt_rounded, color: Color(0xffa5b4fc), size: 12),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: room.members.length,
+                  itemBuilder: (context, index) {
+                    final member = room.members[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Center(
+                        child: StudyAvatarWidget(
+                          avatarType: member.avatarType,
+                          status: member.status,
+                          size: 24,
+                          userName: "", // Compact mode for scrolling strip
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1213,7 +1496,13 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
         final room = StudyRoom.fromMap(doc.data() as Map<String, dynamic>);
         List<StudyRoomMember> updatedMembers = room.members.map((m) {
           if (m.uid == _myId) {
-            return StudyRoomMember(uid: m.uid, name: m.name, isMuted: targetMute);
+            return StudyRoomMember(
+              uid: m.uid,
+              name: m.name,
+              isMuted: targetMute,
+              avatarType: m.avatarType,
+              status: m.status,
+            );
           }
           return m;
         }).toList();
@@ -1320,6 +1609,11 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
           ),
           centerTitle: true,
           actions: [
+            IconButton(
+              icon: const Icon(Icons.face_retouching_natural_rounded, color: Color(0xffa5b4fc)),
+              tooltip: "Customize Avatar",
+              onPressed: _showAvatarSelectorDialog,
+            ),
             if (widget.isHost)
               IconButton(
                 icon: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white70),
@@ -1372,7 +1666,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                 children: [
               // PDF VIEWER SECTION (Top Half)
               Expanded(
-                flex: _isCanvasFullScreen ? 1 : 11,
+                flex: _isCanvasFullScreen ? 1 : 10,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: ClipRRect(
@@ -2169,7 +2463,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
               // CHAT SECTION (Bottom Half)
               if (!_isCanvasFullScreen)
                 Expanded(
-                  flex: 7,
+                  flex: 8,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: _buildGlassContainer(
@@ -2177,6 +2471,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          _buildHorizontalActiveAvatars(),
                           // Glassmorphic tabs header
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -2238,57 +2533,209 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
   }
 
   Widget _buildDiscussionPlaceholder() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        border: Border.all(color: Colors.white10, width: 1.2),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xff6366f1).withOpacity(0.1),
-                border: Border.all(
-                  color: const Color(0xff6366f1).withOpacity(0.3),
-                  width: 2,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: _db.collection('study_rooms').doc(widget.roomId).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xff6366f1)));
+        }
+        final room = StudyRoom.fromMap(snapshot.data!.data() as Map<String, dynamic>);
+        return Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xff090f1d),
+                Color(0xff030712),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: Colors.white10, width: 1.2),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header of study hall
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.school_rounded, color: Color(0xff6366f1), size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          "Study Hall Co-Working",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xff10b981).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xff10b981).withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: Color(0xff10b981),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "${room.members.length} Studying",
+                            style: const TextStyle(
+                              color: Color(0xff34d399),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: const Icon(
-                Icons.forum_rounded,
-                color: Color(0xffa5b4fc),
-                size: 48,
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Divider(color: Colors.white10, height: 1),
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              "Open Discussion Space",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                "No document loaded. Feel free to discuss concepts, ask questions in the chat, or unmute to speak with others!",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white38,
-                  fontSize: 13,
-                  height: 1.5,
+              // Grid of study desks
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: GridView.builder(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 130,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
+                    itemCount: room.members.length,
+                    itemBuilder: (context, index) {
+                      final member = room.members[index];
+                      final isMe = member.uid == _myId;
+                      
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.02),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isMe ? const Color(0xff6366f1).withOpacity(0.3) : Colors.white.withOpacity(0.06),
+                            width: isMe ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            // 1. The desk backdrop (wooden shelf look)
+                            Positioned(
+                              bottom: 8,
+                              left: 6,
+                              right: 6,
+                              child: Container(
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      const Color(0xff7c2d12).withOpacity(0.85), // Warm mahogany / dark brown
+                                      const Color(0xff451a03).withOpacity(0.85),
+                                    ],
+                                  ),
+                                  borderRadius: const BorderRadius.only(
+                                    topLeft: Radius.circular(8),
+                                    topRight: Radius.circular(8),
+                                    bottomLeft: Radius.circular(12),
+                                    bottomRight: Radius.circular(12),
+                                  ),
+                                  border: Border.all(color: Colors.white10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.3),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  children: [
+                                    // Desk items: mug ☕ and notebook 📓
+                                    Positioned(
+                                      left: 8,
+                                      top: 3,
+                                      child: Text(
+                                        member.avatarType == 'coffee' ? '☕' : '📓',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 8,
+                                      top: 3,
+                                      child: Text(
+                                        member.avatarType == 'coder' ? '💻' : '✍️',
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                    ),
+                                    // Wood Nameplate centered on front of the desk
+                                    Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        margin: const EdgeInsets.only(bottom: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.5),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.white10, width: 0.5),
+                                        ),
+                                        child: Text(
+                                          member.name.length > 9 ? "${member.name.substring(0, 8)}.." : member.name,
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 7.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // 2. The Avatar sitting at the desk
+                            Positioned(
+                              top: -4,
+                              child: StudyAvatarWidget(
+                                avatarType: member.avatarType,
+                                status: member.status,
+                                size: 54,
+                                userName: "", // Hide default username tag to avoid overlap
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2731,18 +3178,19 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.poll_rounded, color: Colors.white.withOpacity(0.2), size: 36),
-            const SizedBox(height: 12),
+            Icon(Icons.poll_rounded, color: Colors.white.withOpacity(0.2), size: 32),
+            const SizedBox(height: 8),
             const Text(
               "No Active Polls Currently",
-              style: TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold),
             ),
             if (_isPresenter) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xff6366f1),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 ),
                 onPressed: _showPollDialog,
                 icon: const Icon(Icons.add_rounded, color: Colors.white, size: 14),
@@ -3749,4 +4197,693 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GridPainter oldDelegate) => false;
+}
+
+class StudyAvatarWidget extends StatefulWidget {
+  final String avatarType;
+  final String status;
+  final double size;
+  final String userName;
+
+  const StudyAvatarWidget({
+    super.key,
+    required this.avatarType,
+    required this.status,
+    this.size = 70.0,
+    required this.userName,
+  });
+
+  @override
+  State<StudyAvatarWidget> createState() => _StudyAvatarWidgetState();
+}
+
+class _StudyAvatarWidgetState extends State<StudyAvatarWidget> with SingleTickerProviderStateMixin {
+  late AnimationController _animController;
+  late Animation<double> _bobAnimation;
+  late Animation<double> _pulseAnimation;
+  final List<Offset> _particleOffsets = [];
+  final List<String> _particles = [];
+  Timer? _particleTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+
+    _bobAnimation = Tween<double>(begin: 0.0, end: -8.0).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
+    );
+
+    _startParticleSpawning();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    _particleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startParticleSpawning() {
+    _particleTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+      if (!mounted) return;
+      if (widget.status == 'sleeping') {
+        setState(() {
+          _particles.add("💤");
+          _particleOffsets.add(const Offset(15, -10));
+        });
+      } else if (widget.status == 'studying') {
+        setState(() {
+          String particle = "✨";
+          if (widget.avatarType == 'coder') {
+            particle = const ['💻', '📝', '✨', '⚡'][math.Random().nextInt(4)];
+          } else if (widget.avatarType == 'bookworm') {
+            particle = const ['📖', '✏️', '✨', '🎓'][math.Random().nextInt(4)];
+          } else if (widget.avatarType == 'panda') {
+            particle = const ['🎋', '🐾', '✨'][math.Random().nextInt(3)];
+          } else if (widget.avatarType == 'coffee') {
+            particle = const ['☕', '🍪', '✨', '📖'][math.Random().nextInt(4)];
+          } else if (widget.avatarType == 'cat') {
+            particle = const ['🐈', '🐾', '✨', '🧶'][math.Random().nextInt(4)];
+          }
+          _particles.add(particle);
+          _particleOffsets.add(Offset(
+            (math.Random().nextDouble() - 0.5) * widget.size,
+            -15.0,
+          ));
+        });
+      }
+
+      if (_particles.length > 5) {
+        _particles.removeAt(0);
+        _particleOffsets.removeAt(0);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSleeping = widget.status == 'sleeping';
+    final isAway = widget.status == 'away' || widget.status == 'distracted';
+    final isStudying = widget.status == 'studying';
+
+    Widget avatarGraphic;
+
+    switch (widget.avatarType) {
+      case 'bookworm':
+        avatarGraphic = _buildBookworm(isSleeping, isAway);
+        break;
+      case 'panda':
+        avatarGraphic = _buildPanda(isSleeping, isAway);
+        break;
+      case 'coffee':
+        avatarGraphic = _buildCoffee(isSleeping, isAway);
+        break;
+      case 'cat':
+        avatarGraphic = _buildCat(isSleeping, isAway);
+        break;
+      case 'coder':
+      default:
+        avatarGraphic = _buildCoder(isSleeping, isAway);
+        break;
+    }
+
+    return SizedBox(
+      width: widget.size + 30,
+      height: widget.userName.isNotEmpty ? widget.size + 40 : widget.size + 15,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // Floating Particles
+          if (isStudying || isSleeping)
+            ...List.generate(_particles.length, (idx) {
+              if (idx >= _particleOffsets.length) return const SizedBox.shrink();
+              return TweenAnimationBuilder<double>(
+                key: ValueKey(idx.toString() + _particles[idx]),
+                tween: Tween(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 1500),
+                builder: (context, val, child) {
+                  final x = _particleOffsets[idx].dx * (1 + val * 0.2);
+                  final y = _particleOffsets[idx].dy - (val * 45.0);
+                  final opacity = 1.0 - val;
+                  return Positioned(
+                    left: (widget.size + 30) / 2 + x - 8,
+                    top: (widget.userName.isNotEmpty ? widget.size + 40 : widget.size + 15) / 2 + y,
+                    child: Opacity(
+                      opacity: opacity.clamp(0.0, 1.0),
+                      child: Transform.scale(
+                        scale: (0.7 + val * 0.5),
+                        child: Text(
+                          _particles[idx],
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }),
+
+          // Avatar base layout
+          AnimatedBuilder(
+            animation: _animController,
+            builder: (context, child) {
+              double tiltAngle = 0.0;
+              double verticalOffset = 0.0;
+
+              if (isSleeping) {
+                tiltAngle = 0.15; // Sleep tilt
+                verticalOffset = 2.0;
+              } else if (isStudying) {
+                verticalOffset = _bobAnimation.value;
+              }
+
+              return Transform.translate(
+                offset: Offset(0, verticalOffset),
+                child: Transform.rotate(
+                  angle: tiltAngle,
+                  child: Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: _getGlowColor().withOpacity(isAway ? 0.05 : 0.3),
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: avatarGraphic,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // Status Badge overlay
+          Positioned(
+            bottom: widget.userName.isNotEmpty ? 22 : 4,
+            right: widget.userName.isNotEmpty ? 12 : 0,
+            child: _buildStatusIndicator(),
+          ),
+
+          // Username below avatar
+          if (widget.userName.isNotEmpty)
+            Positioned(
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white10, width: 0.8),
+                ),
+                child: Text(
+                  widget.userName.length > 9 ? "${widget.userName.substring(0, 8)}.." : widget.userName,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Color _getGlowColor() {
+    switch (widget.avatarType) {
+      case 'bookworm': return const Color(0xff10b981); // Emerald
+      case 'panda': return const Color(0xffa5b4fc); // Purple-ish indigo
+      case 'coffee': return const Color(0xfff59e0b); // Amber
+      case 'cat': return const Color(0xffec4899); // Pink
+      case 'coder':
+      default: return const Color(0xff6366f1); // Indigo
+    }
+  }
+
+  Widget _buildStatusIndicator() {
+    IconData icon;
+    Color color;
+    if (widget.status == 'sleeping') {
+      icon = Icons.bedtime_rounded;
+      color = Colors.indigoAccent;
+    } else if (widget.status == 'away' || widget.status == 'distracted') {
+      icon = Icons.hourglass_empty_rounded;
+      color = Colors.amber;
+    } else {
+      icon = Icons.edit_note_rounded;
+      color = const Color(0xff10b981);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xff0f172a),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white24, width: 1.5),
+      ),
+      child: Icon(icon, color: color, size: 10),
+    );
+  }
+
+  // 1. Coder Avatar UI (Indigo theme)
+  Widget _buildCoder(bool isSleeping, bool isAway) {
+    return Container(
+      color: const Color(0xff312e81),
+      child: Stack(
+        children: [
+          // Background circuits
+          Center(
+            child: Icon(Icons.code_rounded, color: Colors.white.withOpacity(0.08), size: 55),
+          ),
+          // Character
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: widget.size * 0.75,
+              height: widget.size * 0.7,
+              decoration: BoxDecoration(
+                color: const Color(0xff4338ca),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Glasses / Eyes
+                  Positioned(
+                    top: 10,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildEye(isSleeping),
+                        const SizedBox(width: 8),
+                        _buildEye(isSleeping),
+                      ],
+                    ),
+                  ),
+                  // Keyboard/Laptop screen in front
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      width: widget.size * 0.5,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: const Color(0xff1e1b4b),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xff6366f1).withOpacity(0.6),
+                            blurRadius: 6,
+                          )
+                        ]
+                      ),
+                      child: const Center(
+                        child: Text(
+                          "0101",
+                          style: TextStyle(color: Color(0xff818cf8), fontSize: 7, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAway) _buildAwayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  // 2. Bookworm Avatar UI (Green/Emerald theme)
+  Widget _buildBookworm(bool isSleeping, bool isAway) {
+    return Container(
+      color: const Color(0xff064e3b),
+      child: Stack(
+        children: [
+          Center(
+            child: Icon(Icons.menu_book_rounded, color: Colors.white.withOpacity(0.08), size: 55),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: widget.size * 0.75,
+              height: widget.size * 0.7,
+              decoration: BoxDecoration(
+                color: const Color(0xff047857),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Bookworm glasses
+                  Positioned(
+                    top: 12,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xff34d399), width: 1.5),
+                          ),
+                          child: Center(child: _buildEye(isSleeping, dotSize: 3)),
+                        ),
+                        Container(width: 4, height: 2, color: const Color(0xff34d399)),
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: const Color(0xff34d399), width: 1.5),
+                          ),
+                          child: Center(child: _buildEye(isSleeping, dotSize: 3)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Holding book
+                  Positioned(
+                    bottom: 0,
+                    child: Icon(Icons.bookmark_added_rounded, color: const Color(0xff6ee7b7), size: widget.size * 0.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAway) _buildAwayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  // 3. Focus Panda Avatar UI (Slate/White-Black theme)
+  Widget _buildPanda(bool isSleeping, bool isAway) {
+    return Container(
+      color: const Color(0xff1e293b),
+      child: Stack(
+        children: [
+          // Panda ears
+          Positioned(
+            left: widget.size * 0.15,
+            top: widget.size * 0.15,
+            child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle)),
+          ),
+          Positioned(
+            right: widget.size * 0.15,
+            top: widget.size * 0.15,
+            child: Container(width: 18, height: 18, decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle)),
+          ),
+          // Face
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: widget.size * 0.8,
+              height: widget.size * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(36),
+                  topRight: Radius.circular(36),
+                  bottomLeft: Radius.circular(10),
+                  bottomRight: Radius.circular(10),
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Panda black patches around eyes
+                  Positioned(
+                    top: 14,
+                    left: 12,
+                    child: Container(
+                      width: 16,
+                      height: 18,
+                      decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+                      child: Center(child: _buildEye(isSleeping, color: Colors.white)),
+                    ),
+                  ),
+                  Positioned(
+                    top: 14,
+                    right: 12,
+                    child: Container(
+                      width: 16,
+                      height: 18,
+                      decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(8)),
+                      child: Center(child: _buildEye(isSleeping, color: Colors.white)),
+                    ),
+                  ),
+                  // Cute nose
+                  Positioned(
+                    top: 32,
+                    child: Container(
+                      width: 6,
+                      height: 4,
+                      decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+                  // Bamboo in hands
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(4)),
+                      child: const Text("🎋", style: TextStyle(fontSize: 8)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAway) _buildAwayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  // 4. Coffee Lover Avatar UI (Warm Amber theme)
+  Widget _buildCoffee(bool isSleeping, bool isAway) {
+    return Container(
+      color: const Color(0xff78350f),
+      child: Stack(
+        children: [
+          Center(
+            child: Icon(Icons.coffee_rounded, color: Colors.white.withOpacity(0.08), size: 55),
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: widget.size * 0.75,
+              height: widget.size * 0.7,
+              decoration: BoxDecoration(
+                color: const Color(0xffb45309),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(30),
+                  topRight: Radius.circular(30),
+                ),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Eyes
+                  Positioned(
+                    top: 12,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildEye(isSleeping),
+                        const SizedBox(width: 10),
+                        _buildEye(isSleeping),
+                      ],
+                    ),
+                  ),
+                  // Steaming Mug
+                  Positioned(
+                    bottom: 2,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.coffee_rounded, color: Color(0xfffcd34d), size: 18),
+                        const SizedBox(width: 2),
+                        Container(
+                          width: 8,
+                          height: 4,
+                          decoration: BoxDecoration(color: Colors.white54, borderRadius: BorderRadius.circular(2)),
+                        )
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAway) _buildAwayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  // 5. Chill Cat Avatar UI (Pink/Rose theme)
+  Widget _buildCat(bool isSleeping, bool isAway) {
+    return Container(
+      color: const Color(0xff881337),
+      child: Stack(
+        children: [
+          // Cat ears
+          Positioned(
+            left: widget.size * 0.12,
+            top: widget.size * 0.1,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: Color(0xffbe123c),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: widget.size * 0.12,
+            top: widget.size * 0.1,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: Color(0xffbe123c),
+                borderRadius: BorderRadius.only(
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+            ),
+          ),
+          // Face
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: widget.size * 0.78,
+              height: widget.size * 0.72,
+              decoration: const BoxDecoration(
+                color: Color(0xfff43f5e),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                  bottomLeft: Radius.circular(8),
+                  bottomRight: Radius.circular(8),
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Eyes
+                  Positioned(
+                    top: 14,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildEye(isSleeping),
+                        const SizedBox(width: 12),
+                        _buildEye(isSleeping),
+                      ],
+                    ),
+                  ),
+                  // Whiskers
+                  Positioned(
+                    top: 24,
+                    left: 6,
+                    child: Container(width: 8, height: 1, color: Colors.white30),
+                  ),
+                  Positioned(
+                    top: 24,
+                    right: 6,
+                    child: Container(width: 8, height: 1, color: Colors.white30),
+                  ),
+                  // Holding a yarn ball
+                  Positioned(
+                    bottom: 1,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                        color: Color(0xfffda4af),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Text("🧶", style: TextStyle(fontSize: 8)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isAway) _buildAwayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEye(bool isSleeping, {Color color = Colors.black87, double dotSize = 4.0}) {
+    if (isSleeping) {
+      // Curved sleeping line
+      return Container(
+        width: 10,
+        height: 4,
+        margin: const EdgeInsets.only(top: 2),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: color.withOpacity(0.8), width: 1.5),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: dotSize,
+      height: dotSize,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  Widget _buildAwayOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.55),
+        child: const Center(
+          child: Icon(Icons.help_outline_rounded, color: Colors.white60, size: 24),
+        ),
+      ),
+    );
+  }
 }

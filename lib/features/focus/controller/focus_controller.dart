@@ -319,6 +319,74 @@ class FocusController extends ChangeNotifier {
               needsSyncToCloud = true;
             }
 
+            // Load and restore categoryMinutes map from Firestore
+            final cloudCatMinutes = data['categoryMinutes'] as Map<String, dynamic>?;
+            if (cloudCatMinutes != null) {
+              cloudCatMinutes.forEach((k, v) {
+                final val = v as int? ?? 0;
+                final localVal = _categoryMinutes[k] ?? 0;
+                if (val > localVal) {
+                  _categoryMinutes[k] = val;
+                  prefs.setInt("${prefix}cat_$k", val);
+                  updated = true;
+                } else if (localVal > val) {
+                  needsSyncToCloud = true;
+                }
+              });
+            }
+
+            // Load and restore weeklyMinutes map from Firestore
+            final cloudWeeklyMinutes = data['weeklyMinutes'] as Map<String, dynamic>?;
+            if (cloudWeeklyMinutes != null) {
+              cloudWeeklyMinutes.forEach((k, v) {
+                final val = v as int? ?? 0;
+                final localVal = _weeklyMinutes[k] ?? 0;
+                if (val > localVal) {
+                  _weeklyMinutes[k] = val;
+                  prefs.setInt("${prefix}${k}_minutes", val);
+                  updated = true;
+                } else if (localVal > val) {
+                  needsSyncToCloud = true;
+                }
+              });
+            }
+
+            // Load and restore weeklyData map from Firestore
+            final cloudWeeklyData = data['weeklyData'] as Map<String, dynamic>?;
+            if (cloudWeeklyData != null) {
+              cloudWeeklyData.forEach((k, v) {
+                final val = v as int? ?? 0;
+                final localVal = _weeklyData[k] ?? 0;
+                if (val > localVal) {
+                  _weeklyData[k] = val;
+                  prefs.setInt("${prefix}$k", val);
+                  updated = true;
+                } else if (localVal > val) {
+                  needsSyncToCloud = true;
+                }
+              });
+            }
+
+            // Load and restore historyMap from Firestore
+            final cloudHistoryMap = data['historyMap'] as Map<String, dynamic>?;
+            if (cloudHistoryMap != null) {
+              bool historyUpdated = false;
+              cloudHistoryMap.forEach((k, v) {
+                final val = v as int? ?? 0;
+                final localVal = _historyMap[k] ?? 0;
+                if (val > localVal) {
+                  _historyMap[k] = val;
+                  historyUpdated = true;
+                  updated = true;
+                } else if (localVal > val) {
+                  needsSyncToCloud = true;
+                }
+              });
+              if (historyUpdated) {
+                await prefs.setString("${prefix}focus_history_map", jsonEncode(_historyMap));
+              }
+            }
+
             if (updated) {
               notifyListeners();
             }
@@ -636,6 +704,10 @@ class FocusController extends ChangeNotifier {
           "streak": _streak,
           "cumulativeXp": cumulativeXp,
           "totalFocusMinutes": totalMinutes,
+          "categoryMinutes": _categoryMinutes,
+          "weeklyMinutes": _weeklyMinutes,
+          "weeklyData": _weeklyData,
+          "historyMap": _historyMap,
           "lastUpdated": FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }

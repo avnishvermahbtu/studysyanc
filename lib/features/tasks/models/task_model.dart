@@ -40,6 +40,8 @@ class Task {
   List<SubTask> subtasks;
   bool isRecommended;
   String recommendedBy;
+  bool isTimeBlocked;
+  int timeBlockDuration;
 
   Task({
     this.id = "",
@@ -53,6 +55,8 @@ class Task {
     this.subtasks = const [],
     this.isRecommended = false,
     this.recommendedBy = "",
+    this.isTimeBlocked = false,
+    this.timeBlockDuration = 60,
   });
 
   /// Convert Firebase -> Task
@@ -76,6 +80,8 @@ class Task {
       subtasks: parsedSubtasks,
       isRecommended: data['isRecommended'] ?? false,
       recommendedBy: data['recommendedBy'] ?? '',
+      isTimeBlocked: data['isTimeBlocked'] ?? false,
+      timeBlockDuration: data['timeBlockDuration'] ?? 60,
     );
   }
 
@@ -92,6 +98,8 @@ class Task {
       "subtasks": subtasks.map((x) => x.toMap()).toList(),
       "isRecommended": isRecommended,
       "recommendedBy": recommendedBy,
+      "isTimeBlocked": isTimeBlocked,
+      "timeBlockDuration": timeBlockDuration,
     };
   }
 }

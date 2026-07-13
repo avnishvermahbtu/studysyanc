@@ -10,7 +10,8 @@ import '../../../core/services/tts_service.dart';
 
 class FlashcardStudyScreen extends StatefulWidget {
   final FlashcardDeck deck;
-  const FlashcardStudyScreen({super.key, required this.deck});
+  final int? targetLeitnerBox;
+  const FlashcardStudyScreen({super.key, required this.deck, this.targetLeitnerBox});
 
   @override
   State<FlashcardStudyScreen> createState() => _FlashcardStudyScreenState();
@@ -70,7 +71,16 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen>
 
       final allCards = snap.docs.map((doc) => Flashcard.fromMap(doc.data(), doc.id)).toList();
 
-      if (_studyAllMode) {
+      if (widget.targetLeitnerBox != null) {
+        _cardsToStudy = allCards.where((card) {
+          final reps = card.repetitions;
+          if (widget.targetLeitnerBox == 1) return reps <= 0;
+          if (widget.targetLeitnerBox == 2) return reps == 1;
+          if (widget.targetLeitnerBox == 3) return reps == 2;
+          if (widget.targetLeitnerBox == 4) return reps == 3;
+          return reps >= 4;
+        }).toList();
+      } else if (_studyAllMode) {
         _cardsToStudy = allCards;
       } else {
         final now = DateTime.now();
@@ -191,7 +201,9 @@ class _FlashcardStudyScreenState extends State<FlashcardStudyScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          "${widget.deck.name} Study",
+          widget.targetLeitnerBox != null
+              ? "${widget.deck.name} (Box ${widget.targetLeitnerBox})"
+              : "${widget.deck.name} Study",
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,

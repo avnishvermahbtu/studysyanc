@@ -99,11 +99,15 @@ class StudyRoomMember {
   final String uid;
   final String name;
   final bool isMuted;
+  final String avatarType;
+  final String status;
 
   StudyRoomMember({
     required this.uid,
     required this.name,
     this.isMuted = false,
+    this.avatarType = 'coder',
+    this.status = 'studying',
   });
 
   Map<String, dynamic> toMap() {
@@ -111,6 +115,8 @@ class StudyRoomMember {
       'uid': uid,
       'name': name,
       'isMuted': isMuted,
+      'avatarType': avatarType,
+      'status': status,
     };
   }
 
@@ -119,6 +125,8 @@ class StudyRoomMember {
       uid: map['uid'] ?? '',
       name: map['name'] ?? '',
       isMuted: map['isMuted'] ?? false,
+      avatarType: map['avatarType'] ?? 'coder',
+      status: map['status'] ?? 'studying',
     );
   }
 }

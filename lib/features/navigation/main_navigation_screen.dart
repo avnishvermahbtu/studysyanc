@@ -191,7 +191,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final isCurrent = currentIndex == index;
     return GestureDetector(
       onTap: () {
-        Navigator.pop(context); // Close bottom sheet
+        Navigator.pop(context);
         navigateToTab(index);
       },
       child: Column(

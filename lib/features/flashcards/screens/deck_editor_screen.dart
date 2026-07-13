@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/deck_model.dart';
 import '../models/flashcard_model.dart';
+import 'leitner_cabinet_screen.dart';
 
 class DeckEditorScreen extends StatefulWidget {
   final FlashcardDeck deck;
@@ -252,6 +253,21 @@ class _DeckEditorScreenState extends State<DeckEditorScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.inventory_2_rounded, color: Color(0xffec4899)),
+            tooltip: "Leitner Cabinet",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => LeitnerCabinetScreen(deck: widget.deck),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xffec4899),

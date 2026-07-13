@@ -13,6 +13,7 @@ import 'task_detail_page.dart';
 import '../../focus/controller/focus_controller.dart';
 import '../../../core/services/network_service.dart';
 import 'package:studysync/core/theme/theme_manager.dart';
+import 'time_blocking_canvas_screen.dart';
 
 // Custom Painter to render a sharp linear gradient outline on card borders
 class CardGradientBorderPainter extends CustomPainter {
@@ -874,6 +875,19 @@ class _TaskScreenState extends State<TaskScreen> {
               ],
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.calendar_view_day_rounded, color: Colors.white70),
+            tooltip: "Time Block Calendar",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TimeBlockingCanvasScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.all(3),
             decoration: const BoxDecoration(
