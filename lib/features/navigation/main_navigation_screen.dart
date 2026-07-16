@@ -55,7 +55,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           .where("userId", isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? "")
           .snapshots()
           .listen((event) {
-        _onWidgetUpdate();
+        final activeCount = event.docs.where((doc) {
+          final data = doc.data();
+          return data['isDone'] == false;
+        }).length;
+        WidgetService.updateWidgetData(activeCount);
       });
       // Trigger initial widget update
       _onWidgetUpdate();
@@ -274,7 +278,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       },
       child: Scaffold(
         backgroundColor: ThemeManager.bgColor,
-        drawer: CustomDrawer(onNavigate: navigateToTab),
+        drawer: CustomDrawer(onNavigate: navigateToTab, currentIndex: currentIndex),
         body: IndexedStack(
           index: currentIndex,
           children: [

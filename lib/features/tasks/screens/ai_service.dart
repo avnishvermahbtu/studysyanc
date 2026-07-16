@@ -986,6 +986,7 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
   Future<Map<String, dynamic>> evaluateFeynmanExplanation(
     String topic,
     String explanationText,
+    String audienceLevel,
   ) async {
     final hasInternet = await NetworkService().hasInternet();
     if (!hasInternet) {
@@ -995,25 +996,32 @@ Return ONLY the raw valid JSON. Do not include markdown code block syntax (like 
     final prompt = """
 You are an expert academic mentor and educator. The student is using the Feynman Technique to verbally explain a concept to you.
 The topic is: "$topic"
+The student's target audience is: "$audienceLevel"
 The student's explanation is: "$explanationText"
 
-Perform a detailed evaluation of their explanation. Specifically:
+Perform a detailed evaluation of their explanation customized for explaining this topic to a "$audienceLevel". Specifically:
 1. Determine their conceptual understanding.
 2. Grade the explanation on a scale of 1 to 10.
-3. Identify crucial points they missed (missingPoints).
-4. Identify any incorrect statements or misconceptions (misconceptions).
+3. Identify crucial points they missed (missingPoints) that are appropriate for a "$audienceLevel" level explanation.
+4. Identify any incorrect statements or misconceptions (misconceptions) they stated.
 5. Generate a concise, structured bulleted summary/notes of the topic for their revision (summaryNotes).
-6. Provide a warm, constructive feedback paragraph in friendly Hinglish (Hindi written in English script) or simple English.
+6. Provide a warm, constructive feedback paragraph in friendly Hinglish (Hindi written in English script) or simple English. Focus on how well they adapted their language, detail level, and analogy style for a "$audienceLevel".
+7. Rate their simplification skills (avoiding complex jargon) on a scale of 1 to 10 (simplificationScore).
+8. Provide constructive feedback on their use of analogies or comparisons (analogyFeedback). If they didn't use an analogy, suggest a highly effective one suitable for a "$audienceLevel".
+9. Generate 2-3 deep, conceptual follow-up questions to test their understanding further (followUpQuestions).
 
 Return ONLY a valid JSON object matching this schema. Do not include markdown code block formatting (like ```json or ```), explainers, or any additional text.
 
 Schema:
 {
   "score": 8,
+  "simplificationScore": 9,
   "feedback": "Aapka explanation bohot achha tha! Aapne X aur Y ko bohot simple terms mein samjhaya. Lekin...",
   "missingPoints": ["Point A detail", "Point B detail"],
   "misconceptions": ["Misconception A if any"],
-  "summaryNotes": "- Key point 1\\n- Key point 2\\n- Key point 3"
+  "analogyFeedback": "Aapne X analogy ka use kiya, jo bohot fitting hai...",
+  "summaryNotes": "- Key point 1\\n- Key point 2\\n- Key point 3",
+  "followUpQuestions": ["Conceptual Question 1", "Conceptual Question 2"]
 }
 """;
 
@@ -1033,10 +1041,13 @@ Schema:
     } catch (e) {
       return {
         "score": 5,
-        "feedback": "Explanation parsed, but analysis failed. Try speaking more clearly. Error: \${e.toString()}",
+        "simplificationScore": 5,
+        "feedback": "Explanation parsed, but analysis failed. Try speaking more clearly. Error: ${e.toString()}",
         "missingPoints": ["Could not parse missing points."],
         "misconceptions": [],
-        "summaryNotes": "- Review: $topic"
+        "analogyFeedback": "Could not generate analogy suggestions.",
+        "summaryNotes": "- Review: $topic",
+        "followUpQuestions": ["What is the primary function/concept of $topic?"]
       };
     }
   }

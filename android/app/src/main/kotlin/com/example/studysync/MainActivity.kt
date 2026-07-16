@@ -77,10 +77,15 @@ class MainActivity : FlutterActivity() {
                 }
                 "setDND" -> {
                     val enable = call.argument<Boolean>("enable") ?: false
+                    val mode = call.argument<String>("mode") ?: "priority"
                     val granted = notificationManager.isNotificationPolicyAccessGranted
                     if (granted) {
                         if (enable) {
-                            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                            when (mode) {
+                                "none" -> notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
+                                "alarms" -> notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+                                else -> notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                            }
                         } else {
                             notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
                         }

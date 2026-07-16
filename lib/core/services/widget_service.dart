@@ -5,28 +5,20 @@ import '../../features/focus/controller/focus_controller.dart';
 
 class WidgetService {
   static const MethodChannel _channel = MethodChannel('com.example.studysync/widget');
+  static int _cachedActiveCount = 0;
 
   // Trigger home screen widget update with streak and active task counts
-  static Future<void> updateWidgetData() async {
+  static Future<void> updateWidgetData([int? activeCount]) async {
     try {
+      if (activeCount != null) {
+        _cachedActiveCount = activeCount;
+      }
       final FocusController focusController = FocusController();
       final int streak = focusController.streak;
 
-      // Query active tasks count from Firestore
-      int activeTasksCount = 0;
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection("tasks")
-            .where("userId", isEqualTo: user.uid)
-            .where("isDone", isEqualTo: false)
-            .get();
-        activeTasksCount = querySnapshot.docs.length;
-      }
-
       await _channel.invokeMethod('updateWidgetData', {
         'streak': streak,
-        'activeTasksCount': activeTasksCount,
+        'activeTasksCount': _cachedActiveCount,
         'isTimerRunning': focusController.isRunning,
       });
     } on PlatformException catch (_) {

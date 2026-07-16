@@ -22,13 +22,13 @@ class DNDService {
     } on PlatformException catch (_) {}
   }
 
-  /// Enables or disables Do Not Disturb (Priority Only Mode).
-  static Future<void> setDND(bool enable) async {
+  /// Enables or disables Do Not Disturb (Priority Only, Alarms Only, or Total Silence).
+  static Future<void> setDND(bool enable, {String mode = 'alarms'}) async {
     if (!Platform.isAndroid) return;
     try {
       final granted = await isPermissionGranted();
       if (granted) {
-        await _channel.invokeMethod('setDND', {'enable': enable});
+        await _channel.invokeMethod('setDND', {'enable': enable, 'mode': mode});
       }
     } on PlatformException catch (_) {}
   }

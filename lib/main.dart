@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -58,11 +59,13 @@ class MyApp extends StatelessWidget {
             brightness: Brightness.light,
             scaffoldBackgroundColor: const Color(0xfff1f5f9),
             primaryColor: const Color(0xff6366f1),
+            textTheme: GoogleFonts.outfitTextTheme(ThemeData.light().textTheme),
           ),
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             scaffoldBackgroundColor: const Color(0xff020617),
             primaryColor: const Color(0xff6366f1),
+            textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme),
           ),
           home: FirebaseAuth.instance.currentUser == null
               ? const LoginPage()

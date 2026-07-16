@@ -19,10 +19,12 @@ import '../../flashcards/screens/deck_list_screen.dart';
 
 class CustomDrawer extends StatefulWidget {
   final Function(int) onNavigate;
+  final int currentIndex;
 
   const CustomDrawer({
     super.key,
     required this.onNavigate,
+    required this.currentIndex,
   });
 
   @override
@@ -334,27 +336,52 @@ class _CustomDrawerState extends State<CustomDrawer> {
     required String title,
     required VoidCallback onTap,
     Color? color,
+    bool isSelected = false,
   }) {
     final accentColor = color ?? ThemeManager.textMuted;
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: accentColor.withOpacity(0.08),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: accentColor, size: 18),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: ThemeManager.textColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? accentColor.withOpacity(0.06) : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? accentColor.withOpacity(0.25) : Colors.transparent,
+          width: 1.2,
         ),
       ),
-      trailing: Icon(Icons.chevron_right_rounded, color: ThemeManager.textDim, size: 18),
-      onTap: onTap,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isSelected ? accentColor.withOpacity(0.18) : accentColor.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? accentColor.withOpacity(0.3) : Colors.white.withOpacity(0.04),
+              width: 1,
+            ),
+          ),
+          child: Icon(icon, color: isSelected ? Colors.white : accentColor, size: 18),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? Colors.white : ThemeManager.textColor.withOpacity(0.7),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            fontSize: 14.5,
+          ),
+        ),
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          color: isSelected ? accentColor : ThemeManager.textDim.withOpacity(0.4),
+          size: 18,
+        ),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+      ),
     );
   }
 
@@ -384,29 +411,59 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   children: [
                     Row(
                       children: [
-                        // Profile Avatar
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xff6366f1), Color(0xffec4899)],
-                            ),
-                            border: Border.all(color: Colors.white24, width: 1.5),
-                          ),
-                            child: Center(
-                            child: Text(
-                              _studentName.trim().isNotEmpty
-                                  ? _studentName.trim()[0].toUpperCase()
-                                  : "S",
-                              style: const TextStyle(
-                                fontSize: 26,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                        // Profile Avatar Stack (Discord-style status emoji overlap)
+                        Stack(
+                          children: [
+                            Container(
+                              width: 62,
+                              height: 62,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xff6366f1), Color(0xffec4899)],
+                                ),
+                                border: Border.all(color: Colors.white24, width: 1.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xff6366f1).withOpacity(0.3),
+                                    blurRadius: 8,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _studentName.trim().isNotEmpty
+                                      ? _studentName.trim()[0].toUpperCase()
+                                      : "S",
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xff0d0e15),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: const Color(0xff0d0e15), width: 1.5),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _selectedAvatar,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -484,7 +541,55 @@ class _CustomDrawerState extends State<CustomDrawer> {
                             ),
                           ),
                         ),
-
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // XP linear progress bar (Gamified level track)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Container(
+                            height: 6,
+                            width: double.infinity,
+                            color: Colors.white.withOpacity(0.06),
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: (xp / _focusController.xpNeededForNextLevel()).clamp(0.0, 1.0),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Color(0xff6366f1), Color(0xffec4899)],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "$xp / ${_focusController.xpNeededForNextLevel()} XP",
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Text(
+                              "NEXT LEVEL UP",
+                              style: TextStyle(
+                                color: Colors.white30,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
@@ -502,6 +607,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.dashboard_rounded,
                         title: "Home Dashboard",
                         color: const Color(0xff6366f1),
+                        isSelected: widget.currentIndex == 0,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(0);
@@ -511,6 +617,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.groups_rounded,
                         title: "Co-Study Lobby",
                         color: const Color(0xff10b981),
+                        isSelected: widget.currentIndex == 1,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(1);
@@ -520,6 +627,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.timer_rounded,
                         title: "Solo Focus Timer",
                         color: Colors.pinkAccent,
+                        isSelected: widget.currentIndex == 2,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(2);
@@ -529,6 +637,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.calendar_today_rounded,
                         title: "Daily Schedule",
                         color: Colors.cyanAccent,
+                        isSelected: widget.currentIndex == 5,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(5);
@@ -538,6 +647,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.leaderboard_rounded,
                         title: "Leaderboard",
                         color: Colors.amberAccent,
+                        isSelected: widget.currentIndex == 6,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(6);
@@ -547,6 +657,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                         icon: Icons.forum_rounded,
                         title: "AI Coach Companion",
                         color: const Color(0xffa855f7),
+                        isSelected: widget.currentIndex == 4,
                         onTap: () {
                           Navigator.pop(context);
                           widget.onNavigate(4);
@@ -610,15 +721,20 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.withOpacity(0.08),
                         foregroundColor: Colors.redAccent,
-                        side: const BorderSide(color: Colors.redAccent, width: 1.2),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        side: BorderSide(color: Colors.redAccent.withOpacity(0.4), width: 1.2),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
                       ),
                       icon: const Icon(Icons.logout_rounded, size: 16),
-                      label: const Text("Log Out", style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        "Log Out",
+                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                      ),
                       onPressed: _confirmLogOut,
                     ),
                     const SizedBox(height: 14),

@@ -32,6 +32,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
   double _campfireVol = 0.0;
   bool _isDeepFocusMode = false;
   bool _autoDndEnabled = true;
+  String _dndMode = "alarms";
   late AnimationController _breathingController;
   final List<String> _motivationalQuotes = [
     "Study now, be proud later. Your dream is worth it.",
@@ -84,6 +85,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
     if (mounted) {
       setState(() {
         _autoDndEnabled = prefs.getBool("auto_dnd_enabled") ?? true;
+        _dndMode = prefs.getString("dnd_mode") ?? "alarms";
       });
     }
   }
@@ -104,7 +106,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
             ],
           ),
           content: const Text(
-            "StudySync aapke study timer chalne ke dauran WhatsApp/Instagram ke distracting text alerts ko mute kar dega, par important phone calls aati rahengi! \n\nIske liye next screen par StudySync ko 'Do Not Disturb' settings allow kijiye.",
+            "StudySync aapke study timer chalne ke dauran WhatsApp/Instagram aur distracting notifications ko block kar dega. DND ki intensity (Priority Only, Alarms Only, ya Strict Silence) aap settings panel se control kar sakte hain.\n\nIske liye next screen par StudySync ko 'Do Not Disturb' access allow kijiye.",
             style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -168,7 +170,7 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
         if (_autoDndEnabled) {
           DNDService.isPermissionGranted().then((granted) {
             if (granted) {
-              DNDService.setDND(true);
+              DNDService.setDND(true, mode: _dndMode);
             } else {
               if (mounted) {
                 _showDndExplanationDialog();
@@ -1829,7 +1831,11 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
                         ),
                         Text(
                           _autoDndEnabled 
-                              ? "DND active. Important calls will ring." 
+                              ? (_dndMode == "priority" 
+                                  ? "Priority Mode: Starred contacts/calls bypass."
+                                  : _dndMode == "alarms"
+                                      ? "Alarms Only: Mutes WhatsApp, calls & other apps."
+                                      : "Strict Silence: Complete quiet (no alarms or calls).")
                               : "Mutes texts. Calls ring normally.",
                           style: const TextStyle(
                             color: Colors.white38,
@@ -1854,6 +1860,9 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
                         });
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setBool("auto_dnd_enabled", true);
+                        if (_controller.isRunning) {
+                          DNDService.setDND(true, mode: _dndMode);
+                        }
                       } else {
                         // Request Permission Show dialog
                         _showDndExplanationDialog();
@@ -1871,6 +1880,119 @@ class _FocusScreenState extends State<FocusScreen> with WidgetsBindingObserver, 
                   },
                 ),
               ],
+            ),
+            if (_autoDndEnabled) ...[
+              const SizedBox(height: 12),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Silence Mode Intensity:",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDndModeChip(
+                      mode: "priority",
+                      label: "Priority",
+                      icon: Icons.star_rounded,
+                      subtitle: "Calls/Starred ring",
+                      accentColor: accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildDndModeChip(
+                      mode: "alarms",
+                      label: "Alarms Only",
+                      icon: Icons.alarm_rounded,
+                      subtitle: "Blocks calls & apps",
+                      accentColor: accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildDndModeChip(
+                      mode: "none",
+                      label: "Strict Silence",
+                      icon: Icons.do_not_disturb_on_rounded,
+                      subtitle: "Absolute quiet",
+                      accentColor: accentColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDndModeChip({
+    required String mode,
+    required String label,
+    required IconData icon,
+    required String subtitle,
+    required Color accentColor,
+  }) {
+    final isSelected = _dndMode == mode;
+    return GestureDetector(
+      onTap: () async {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _dndMode = mode;
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString("dnd_mode", mode);
+        
+        // If timer is running, update the system DND mode instantly
+        if (_controller.isRunning && _autoDndEnabled) {
+          DNDService.setDND(true, mode: mode);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? accentColor.withOpacity(0.12) : Colors.white.withOpacity(0.02),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? accentColor.withOpacity(0.6) : Colors.white.withOpacity(0.05),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? accentColor : Colors.white38,
+              size: 16,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white54,
+                fontSize: 10.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isSelected ? Colors.white38 : Colors.white24,
+                fontSize: 8,
+              ),
             ),
           ],
         ),

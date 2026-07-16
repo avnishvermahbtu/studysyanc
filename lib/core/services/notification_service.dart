@@ -302,6 +302,8 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+      category: AndroidNotificationCategory.alarm,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
     );
 
     const NotificationDetails notificationDetails = NotificationDetails(

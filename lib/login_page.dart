@@ -271,18 +271,20 @@ class _LoginPageState extends State<LoginPage> {
         password: password,
       );
 
-      // Force reload to get latest user details
-      await userCredential.user?.reload();
-      final updatedUser = _auth.currentUser;
-      if (updatedUser != null && updatedUser.displayName != null && updatedUser.displayName!.isNotEmpty) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('student_name', updatedUser.displayName!);
-      }
+      // Force reload to get latest user details in the background
+      userCredential.user?.reload().then((_) async {
+        final updatedUser = _auth.currentUser;
+        if (updatedUser != null && updatedUser.displayName != null && updatedUser.displayName!.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('student_name', updatedUser.displayName!);
+        }
+      }).catchError((_) {});
 
       if (mounted) {
         Navigator.pop(context); // Dismiss loading loader
-        await FocusController().clearAndReload();
-        await SubscriptionService().init();
+        // Run clearAndReload and init in the background to prevent blocking UI transition
+        FocusController().clearAndReload();
+        SubscriptionService().init();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it
@@ -344,29 +346,32 @@ class _LoginPageState extends State<LoginPage> {
 
       final User? user = userCredential.user;
       if (user != null) {
-        final prefs = await SharedPreferences.getInstance();
-        final String displayName = user.displayName ?? "Student";
-        await prefs.setString('student_name', displayName);
+        // Run user details update and Firestore initialization in the background
+        SharedPreferences.getInstance().then((prefs) async {
+          final String displayName = user.displayName ?? "Student";
+          await prefs.setString('student_name', displayName);
 
-        final userDoc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
-        if (!userDoc.exists) {
-          await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
-            "uid": user.uid,
-            "name": displayName,
-            "email": user.email ?? "",
-            "xp": 0,
-            "level": 1,
-            "streak": 0,
-            "cumulativeXp": 0,
-            "lastUpdated": FieldValue.serverTimestamp(),
-          });
-        }
+          final userDoc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+          if (!userDoc.exists) {
+            await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
+              "uid": user.uid,
+              "name": displayName,
+              "email": user.email ?? "",
+              "xp": 0,
+              "level": 1,
+              "streak": 0,
+              "cumulativeXp": 0,
+              "lastUpdated": FieldValue.serverTimestamp(),
+            });
+          }
+        }).catchError((_) {});
       }
 
       if (mounted) {
         Navigator.pop(context); // Dismiss loader
-        await FocusController().clearAndReload();
-        await SubscriptionService().init();
+        // Run clearAndReload and init in the background to prevent blocking UI transition
+        FocusController().clearAndReload();
+        SubscriptionService().init();
         final pendingCode = PendingJoinService.pendingRoomCode;
         if (pendingCode != null && pendingCode.isNotEmpty) {
           PendingJoinService.pendingRoomCode = null; // Clear it
@@ -607,33 +612,24 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Social grid buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildSocialButton(
-                            icon: Icons.g_mobiledata_rounded,
-                            text: "Google",
-                            iconColor: const Color(0xffef4444),
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              signInWithGoogle();
-                            },
-                          ),
+                    // Social login button
+                    SizedBox(
+                      width: double.infinity,
+                      child: _buildSocialButton(
+                        icon: Image.network(
+                          "https://developers.google.com/identity/images/g-logo.png",
+                          width: 18,
+                          height: 18,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(Icons.g_mobiledata_rounded, color: Color(0xffef4444), size: 24);
+                          },
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildSocialButton(
-                            icon: Icons.facebook_outlined,
-                            text: "Facebook",
-                            iconColor: const Color(0xff3b5998),
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              // Facebook login not configured
-                            },
-                          ),
-                        ),
-                      ],
+                        text: "Continue with Google",
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          signInWithGoogle();
+                        },
+                      ),
                     ),
                     const SizedBox(height: 35),
 
@@ -665,9 +661,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildSocialButton({
-    required IconData icon,
+    required Widget icon,
     required String text,
-    required Color iconColor,
     required VoidCallback onTap,
   }) {
     return Container(
@@ -684,7 +679,7 @@ class _LoginPageState extends State<LoginPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: iconColor, size: 24),
+              icon,
               const SizedBox(width: 8),
               Text(text, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
             ],

@@ -24,10 +24,45 @@ class _FeynmanResultScreenState extends State<FeynmanResultScreen> {
   bool _isSaved = false;
 
   int get score => widget.result['score'] ?? 5;
+  int get simplificationScore => widget.result['simplificationScore'] ?? 5;
   String get feedback => widget.result['feedback'] ?? "Nice attempt explaining this topic!";
   List<dynamic> get missingPoints => widget.result['missingPoints'] ?? [];
   List<dynamic> get misconceptions => widget.result['misconceptions'] ?? [];
+  String get analogyFeedback => widget.result['analogyFeedback'] ?? "";
   String get summaryNotes => widget.result['summaryNotes'] ?? "";
+  List<dynamic> get followUpQuestions => widget.result['followUpQuestions'] ?? [];
+
+  void _showDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff0f172a),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.white10),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                title == "Success" ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                color: title == "Success" ? const Color(0xff10b981) : const Color(0xff6366f1),
+              ),
+              const SizedBox(width: 10),
+              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          content: Text(message, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK", style: TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Future<void> _saveSession() async {
     setState(() {
@@ -41,23 +76,22 @@ class _FeynmanResultScreenState extends State<FeynmanResultScreen> {
         'topic': widget.topic,
         'explanationText': widget.explanationText,
         'score': score,
+        'simplificationScore': simplificationScore,
         'feedback': feedback,
         'missingPoints': missingPoints,
         'misconceptions': misconceptions,
+        'analogyFeedback': analogyFeedback,
         'summaryNotes': summaryNotes,
+        'followUpQuestions': followUpQuestions,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       setState(() {
         _isSaved = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Session saved to your profile successfully! 💾")),
-      );
+      _showDialog("Success", "Session saved to your profile successfully! 💾");
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to save session: ${e.toString()}")),
-      );
+      _showDialog("Error", "Failed to save session: ${e.toString()}");
     } finally {
       if (mounted) {
         setState(() {
@@ -152,6 +186,28 @@ class _FeynmanResultScreenState extends State<FeynmanResultScreen> {
                             animationDuration: 1000,
                           ),
                           const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text("Simplification: ", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 6),
+                              SizedBox(
+                                width: 80,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: simplificationScore / 10.0,
+                                    backgroundColor: Colors.white10,
+                                    valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
+                                    minHeight: 6,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text("$simplificationScore/10", style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           Text(
                             "Topic: ${widget.topic}",
                             style: const TextStyle(
@@ -196,6 +252,86 @@ class _FeynmanResultScreenState extends State<FeynmanResultScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  // Analogy Feedback Card
+                  if (analogyFeedback.isNotEmpty) ...[
+                    _buildSectionHeader("Analogy & Simplification Review"),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.lightbulb_outline_rounded, color: Colors.yellow.shade400, size: 20),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "Analogy Suggestion",
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            analogyFeedback,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Follow-up Questions Card
+                  if (followUpQuestions.isNotEmpty) ...[
+                    _buildSectionHeader("Test Your Concept (Follow-up)"),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Try to answer these questions mentally or speak again to check your understanding:",
+                            style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+                          ),
+                          const SizedBox(height: 14),
+                          ...followUpQuestions.map((q) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.help_outline_rounded, color: Color(0xffa855f7), size: 18),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      q.toString(),
+                                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Gaps / Missing Points Card
                   if (missingPoints.isNotEmpty) ...[

@@ -22,6 +22,13 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
   bool _isLoading = false;
   String _errorMessage = "";
 
+  String _selectedAudience = "5-Year-Old (Analogy Focus)";
+  final List<String> _audiences = [
+    "5-Year-Old (Analogy Focus)",
+    "Peer Student (Conceptual Focus)",
+    "Expert Professor (Technical Rigor Focus)"
+  ];
+
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
@@ -115,18 +122,46 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
     }
   }
 
+  void _showDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff0f172a),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: const BorderSide(color: Colors.white10),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                title == "Success" ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
+                color: title == "Success" ? const Color(0xff10b981) : const Color(0xff6366f1),
+              ),
+              const SizedBox(width: 10),
+              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          ),
+          content: Text(message, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK", style: TextStyle(color: Color(0xff6366f1), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _submitExplanation() async {
     final topic = _topicController.text.trim();
     if (topic.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a topic first.")),
-      );
+      _showDialog("Alert", "Please enter a topic first.");
       return;
     }
     if (_transcribedText.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please speak and explain the topic first.")),
-      );
+      _showDialog("Alert", "Please speak and explain the topic first.");
       return;
     }
 
@@ -136,10 +171,10 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
     });
 
     try {
-      final result = await _aiService.evaluateFeynmanExplanation(topic, _transcribedText);
+      final result = await _aiService.evaluateFeynmanExplanation(topic, _transcribedText, _selectedAudience);
       if (!mounted) return;
 
-      Navigator.push(
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => FeynmanResultScreen(
@@ -149,6 +184,13 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
           ),
         ),
       );
+      if (mounted) {
+        setState(() {
+          _topicController.clear();
+          _transcribedText = "";
+          _errorMessage = "";
+        });
+      }
     } catch (e) {
       setState(() {
         _errorMessage = "Failed to evaluate: ${e.toString()}";
@@ -267,6 +309,61 @@ class _FeynmanTrainerScreenState extends State<FeynmanTrainerScreen> with Single
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(16),
                                 borderSide: const BorderSide(color: Color(0xffa855f7), width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    // Audience Level Selector Card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.04),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Who is your target audience?",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.03),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white10),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedAudience,
+                                dropdownColor: const Color(0xff0f172a),
+                                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
+                                isExpanded: true,
+                                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                items: _audiences.map((String audience) {
+                                  return DropdownMenuItem<String>(
+                                    value: audience,
+                                    child: Text(audience),
+                                  );
+                                }).toList(),
+                                onChanged: (String? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedAudience = newValue;
+                                    });
+                                  }
+                                },
                               ),
                             ),
                           ),

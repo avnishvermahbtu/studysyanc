@@ -624,8 +624,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onTap: _showAvatarInventorySheet,
         child: DashboardCard(
           isGlass: true,
-          bgOpacity: 0.02,
-          gradientBorder: [accentCol.withOpacity(0.55), const Color(0xff6366f1).withOpacity(0.35)],
+          bgOpacity: 0.04,
+          gradientBorder: [accentCol.withOpacity(0.65), const Color(0xff6366f1).withOpacity(0.45)],
           glowColor: glowCol,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -635,39 +635,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: 58,
-                      height: 58,
+                      width: 62,
+                      height: 62,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: accentCol.withOpacity(0.2),
-                          width: 1.2,
+                          color: accentCol.withOpacity(0.3),
+                          width: 1.5,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accentCol.withOpacity(0.15),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
                       ),
                     ),
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [const Color(0xff6366f1), accentCol],
+                          colors: [const Color(0xff4f46e5), accentCol],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: glowCol.withOpacity(0.35),
-                            blurRadius: 10,
-                            spreadRadius: 1,
+                            color: glowCol.withOpacity(0.45),
+                            blurRadius: 12,
+                            spreadRadius: 1.5,
                           ),
                           BoxShadow(
-                            color: const Color(0xff6366f1).withOpacity(0.25),
-                            blurRadius: 10,
+                            color: const Color(0xff6366f1).withOpacity(0.3),
+                            blurRadius: 12,
                             spreadRadius: -2,
                           ),
                         ],
-                        border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.5),
+                        border: Border.all(color: Colors.white.withOpacity(0.45), width: 1.8),
                       ),
                       child: Center(
                         child: Column(
@@ -677,16 +684,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               "LVL",
                               style: TextStyle(
                                 color: Colors.white70,
-                                fontSize: 7.5,
+                                fontSize: 8,
                                 fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
+                                letterSpacing: 0.8,
                               ),
                             ),
                             Text(
                               "$lvl",
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 17,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 height: 1.1,
                               ),
@@ -706,15 +713,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                             decoration: BoxDecoration(
-                              color: bgCol,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: accentCol.withOpacity(0.25), width: 1.0),
+                              gradient: LinearGradient(
+                                colors: [
+                                  accentCol.withOpacity(0.18),
+                                  const Color(0xff6366f1).withOpacity(0.06),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: accentCol.withOpacity(0.35),
+                                width: 1.2,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: glowCol.withOpacity(0.05),
-                                  blurRadius: 6,
+                                  color: glowCol.withOpacity(0.12),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
@@ -723,16 +739,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               children: [
                                 Text(
                                   rank.split(" ").first,
-                                  style: const TextStyle(fontSize: 12),
+                                  style: const TextStyle(fontSize: 13),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 5),
                                 Text(
-                                  rank.split(" ").sublist(1).join(" "),
+                                  rank.split(" ").sublist(1).join(" ").toUpperCase(),
                                   style: TextStyle(
                                     color: accentCol,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 10.5,
-                                    letterSpacing: 0.3,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                    letterSpacing: 0.8,
                                   ),
                                 ),
                               ],
@@ -741,38 +757,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Text(
                             "$xp / ${nextLevelXp} XP",
                             style: TextStyle(
-                              color: accentCol,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11.5,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12.5,
+                              letterSpacing: 0.3,
+                              shadows: [
+                                Shadow(
+                                  color: accentCol.withOpacity(0.45),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                         child: Stack(
                           children: [
                             Container(
-                              height: 8,
+                              height: 10,
                               color: ThemeManager.isLight 
                                   ? Colors.black.withOpacity(0.05) 
-                                  : Colors.white.withOpacity(0.04),
+                                  : Colors.white.withOpacity(0.06),
                             ),
                             FractionallySizedBox(
                               alignment: Alignment.centerLeft,
                               widthFactor: pct,
                               child: Container(
-                                height: 8,
+                                height: 10,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(8),
                                   gradient: LinearGradient(
-                                    colors: [const Color(0xff6366f1), accentCol],
+                                    colors: [
+                                      const Color(0xff4f46e5),
+                                      accentCol,
+                                      const Color(0xffec4899),
+                                    ],
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: accentCol.withOpacity(0.4),
-                                      blurRadius: 4,
+                                      color: accentCol.withOpacity(0.55),
+                                      blurRadius: 6,
                                       spreadRadius: 1,
                                     ),
                                   ],
@@ -782,17 +810,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             "XP PROGRESS: ${(pct * 100).toInt()}%",
                             style: TextStyle(
-                              color: ThemeManager.textDim,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                              color: accentCol.withOpacity(0.95),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
                             ),
                           ),
                           Text(
@@ -800,10 +828,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ? "MAX LEVEL REACHED 👑"
                                 : "NEED ${nextLevelXp - xp} XP TO LVL ${lvl + 1} 🎯",
                             style: TextStyle(
-                              color: ThemeManager.textMuted,
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
+                              color: ThemeManager.textMuted.withOpacity(0.9),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ],
@@ -826,8 +854,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     
     return DashboardCard(
       isGlass: true,
-      bgOpacity: 0.015,
-      gradientBorder: const [Colors.white12, Colors.white10],
+      bgOpacity: 0.04,
+      gradientBorder: [const Color(0xff10b981).withOpacity(0.35), const Color(0xff3b82f6).withOpacity(0.1)],
+      glowColor: const Color(0xff10b981).withOpacity(0.12),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         child: Column(
@@ -839,31 +868,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.bar_chart_rounded, color: Color(0xff10b981), size: 22),
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xff10b981).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.bar_chart_rounded, color: Color(0xff10b981), size: 18),
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       "Weekly Activity & Streak",
                       style: TextStyle(
                         color: ThemeManager.textColor,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
                         fontSize: 14,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.3), width: 1),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.orangeAccent.withOpacity(0.2),
+                        Colors.orange.withOpacity(0.05),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.4), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orangeAccent.withOpacity(0.15),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
                   ),
                   child: Text(
                     "${_focusController.streak} Day Streak 🔥",
                     style: const TextStyle(
                       color: Colors.orangeAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
                     ),
                   ),
                 ),
@@ -883,14 +933,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 
                 // Calculate height factor (out of goal)
                 final double heightFactor = goal > 0 ? (minutes / goal).clamp(0.0, 1.0) : 0.0;
-                final double barHeight = 65 * heightFactor; // Max height 65px
+                final double barHeight = 70 * heightFactor; // Max height 70px
                 
                 Color barColor = const Color(0xff10b981); // Emerald for studied
                 Gradient? barGradient;
                 Widget statusIcon;
                 
                 if (isFuture) {
-                  statusIcon = Icon(Icons.lock_outline_rounded, color: ThemeManager.textDim, size: 12);
+                  statusIcon = Icon(Icons.lock_rounded, color: Colors.white.withOpacity(0.15), size: 12);
                   barColor = Colors.transparent;
                 } else {
                   if (minutes >= goal && goal > 0) {
@@ -909,8 +959,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     statusIcon = const Icon(Icons.flash_on_rounded, color: Colors.amberAccent, size: 13);
                   } else {
                     statusIcon = Icon(
-                      isToday ? Icons.hourglass_empty_rounded : Icons.remove_circle_outline_rounded, 
-                      color: ThemeManager.textDim, 
+                      isToday ? Icons.hourglass_empty_rounded : Icons.radio_button_off_rounded, 
+                      color: isToday ? const Color(0xff818cf8).withOpacity(0.8) : Colors.white.withOpacity(0.15), 
                       size: 12
                     );
                     barColor = Colors.transparent;
@@ -988,16 +1038,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           // Background Channel
                           Container(
-                            width: 14,
-                            height: 70,
+                            width: 16,
+                            height: 75,
                             decoration: BoxDecoration(
                               color: ThemeManager.isLight 
                                   ? Colors.black.withOpacity(0.04) 
                                   : Colors.white.withOpacity(0.03),
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: isToday ? const Color(0xff6366f1).withOpacity(0.4) : Colors.transparent,
-                                width: 1,
+                                color: isToday ? const Color(0xff6366f1).withOpacity(0.6) : Colors.white.withOpacity(0.04),
+                                width: 1.2,
                               ),
                             ),
                           ),
@@ -1006,21 +1056,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             AnimatedContainer(
                               duration: const Duration(milliseconds: 500),
                               curve: Curves.easeOutBack,
-                              width: 14,
-                              height: barHeight < 6 ? 6 : barHeight,
+                              width: 16,
+                              height: barHeight < 8 ? 8 : barHeight,
                               decoration: BoxDecoration(
                                 color: barGradient == null ? barColor : null,
                                 gradient: barGradient,
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: minutes >= goal && goal > 0
-                                    ? [
-                                        BoxShadow(
-                                          color: const Color(0xffec4899).withOpacity(0.3),
-                                          blurRadius: 6,
-                                          spreadRadius: -1,
-                                        )
-                                      ]
-                                    : null,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (minutes >= goal ? const Color(0xffec4899) : const Color(0xff10b981)).withOpacity(0.4),
+                                    blurRadius: 8,
+                                    spreadRadius: -1,
+                                  )
+                                ],
                               ),
                             ),
                         ],
@@ -1031,10 +1079,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         dayName[0],
                         style: TextStyle(
                           color: isToday 
-                              ? const Color(0xff6366f1) 
+                              ? const Color(0xff818cf8) 
                               : (isFuture ? ThemeManager.textDim : ThemeManager.textMuted),
-                          fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 11,
+                          fontWeight: isToday ? FontWeight.w900 : FontWeight.normal,
+                          fontSize: 11.5,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -1043,8 +1091,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         minutes > 0 ? (minutes >= 60 ? "${(minutes / 60).toStringAsFixed(1)}h" : "${minutes}m") : "-",
                         style: TextStyle(
                           color: isToday ? ThemeManager.textColor : ThemeManager.textDim,
-                          fontSize: 9,
-                          fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 9.5,
+                          fontWeight: isToday ? FontWeight.w900 : FontWeight.normal,
                         ),
                       ),
                     ],
@@ -1622,9 +1670,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: _showEditGoalDialog,
       child: DashboardCard(
         isGlass: true,
-        bgOpacity: 0.015,
-        gradientBorder: const [Color(0xff6366f1), Color(0xffec4899)],
-        glowColor: const Color(0xff6366f1),
+        bgOpacity: 0.04,
+        gradientBorder: const [Color(0xff818cf8), Color(0xfff43f5e)],
+        glowColor: const Color(0xff818cf8).withOpacity(0.35),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           child: Row(
@@ -1634,52 +1682,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "TODAY'S STUDY GOAL",
-                      style: TextStyle(
-                        color: Color(0xffa5b4fc),
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xffa5b4fc),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0xffa5b4fc),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          "TODAY'S STUDY GOAL",
+                          style: TextStyle(
+                            color: Color(0xffa5b4fc),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Text(
                       h > 0 ? "${h}h ${m}m" : "${m}m",
                       style: TextStyle(
-                        fontSize: 34,
+                        fontSize: 36,
                         color: ThemeManager.textColor,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
+                        letterSpacing: -0.8,
+                        shadows: [
+                          Shadow(
+                            color: const Color(0xff6366f1).withOpacity(0.3),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: const Color(0xff6366f1).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xff6366f1).withOpacity(0.18),
+                                const Color(0xffec4899).withOpacity(0.06),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: const Color(0xff6366f1).withOpacity(0.2),
-                              width: 0.8,
+                              color: const Color(0xff818cf8).withOpacity(0.35),
+                              width: 1,
                             ),
                           ),
-                          child: Text(
-                            "Goal: $goalText",
-                            style: const TextStyle(
-                              color: Color(0xffa5b4fc),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xff10b981),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Color(0xff10b981),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "Goal: $goalText",
+                                style: const TextStyle(
+                                  color: Color(0xffe0e7ff),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),
                         Icon(
                           Icons.edit_rounded,
-                          color: const Color(0xff6366f1).withOpacity(0.7),
-                          size: 13,
+                          color: const Color(0xff818cf8),
+                          size: 14,
                         ),
                       ],
                     ),
@@ -1688,37 +1788,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(width: 16),
               CircularPercentIndicator(
-                radius: 46.0,
-                lineWidth: 9.0,
+                radius: 48.0,
+                lineWidth: 10.0,
                 percent: progressPct,
-                center: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _selectedAvatar,
-                      style: const TextStyle(
-                        fontSize: 22,
-                      ),
+                center: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.03),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.08),
+                      width: 1,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "${(progressPct * 100).toInt()}%",
-                      style: TextStyle(
-                        color: ThemeManager.textColor,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _selectedAvatar,
+                        style: const TextStyle(
+                          fontSize: 24,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 1),
+                      Text(
+                        "${(progressPct * 100).toInt()}%",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 linearGradient: const LinearGradient(
-                  colors: [Color(0xff6366f1), Color(0xffec4899)],
+                  colors: [Color(0xff818cf8), Color(0xfff43f5e)],
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                 ),
                 backgroundColor: ThemeManager.isLight 
                     ? Colors.black.withOpacity(0.04) 
-                    : Colors.white.withOpacity(0.03),
+                    : Colors.white.withOpacity(0.04),
                 circularStrokeCap: CircularStrokeCap.round,
                 animateFromLastPercent: true,
                 animation: true,

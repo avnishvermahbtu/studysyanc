@@ -82,6 +82,8 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
   bool _isVoiceMuted = false;
   bool _useSimulatedAudio = false; // Fallback if Agora App ID is empty/invalid
   final List<int> _activeUids = [];
+  List<int> _speakingAgoraUids = [];
+  String _agoraConnectionState = "Connecting...";
 
   // Firestore & User
   final _db = FirebaseFirestore.instance;
@@ -125,7 +127,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
     }
   }
 
-  Future<void> _updateMyMemberState({String? avatarType, String? status, bool? isMuted}) async {
+  Future<void> _updateMyMemberState({String? avatarType, String? status, bool? isMuted, int? agoraUid}) async {
     try {
       final docRef = _db.collection('study_rooms').doc(widget.roomId);
       await _db.runTransaction((transaction) async {
@@ -140,6 +142,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
               isMuted: isMuted ?? m.isMuted,
               avatarType: avatarType ?? m.avatarType,
               status: status ?? m.status,
+              agoraUid: agoraUid ?? m.agoraUid,
             );
           }
           return m;
@@ -320,6 +323,9 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
                             final hasDrawRights = room.drawingRights.contains(member.uid);
                             final isMe = member.uid == _myId;
                             final isHandRaised = room.handRaised.contains(member.uid);
+                            final isSpeaking = !_useSimulatedAudio &&
+                                member.agoraUid != null &&
+                                _speakingAgoraUids.contains(member.agoraUid);
  
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -337,11 +343,58 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
                                     width: 48,
                                     height: 52,
                                     child: Center(
-                                      child: StudyAvatarWidget(
-                                        avatarType: member.avatarType,
-                                        status: member.status,
-                                        size: 34,
-                                        userName: "", // Username is shown next to it
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          AnimatedContainer(
+                                            duration: const Duration(milliseconds: 250),
+                                            width: 40,
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: isSpeaking
+                                                    ? const Color(0xff10b981)
+                                                    : Colors.transparent,
+                                                width: 2.5,
+                                              ),
+                                              boxShadow: isSpeaking
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: const Color(0xff10b981).withOpacity(0.4),
+                                                        blurRadius: 8,
+                                                        spreadRadius: 2,
+                                                      )
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: ClipOval(
+                                              child: StudyAvatarWidget(
+                                                avatarType: member.avatarType,
+                                                status: member.status,
+                                                size: 34,
+                                                userName: "", // Username is shown next to it
+                                              ),
+                                            ),
+                                          ),
+                                          if (isSpeaking)
+                                            Positioned(
+                                              bottom: 0,
+                                              right: 0,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xff10b981),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.volume_up_rounded,
+                                                  color: Colors.white,
+                                                  size: 10,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -372,6 +425,32 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+                                  // Mic Mute Status Indicator (Zoom-style)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 8),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: member.isMuted
+                                          ? Colors.redAccent.withOpacity(0.12)
+                                          : const Color(0xff10b981).withOpacity(0.12),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: member.isMuted
+                                            ? Colors.redAccent.withOpacity(0.3)
+                                            : const Color(0xff10b981).withOpacity(0.3),
+                                        width: 0.8,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      member.isMuted
+                                          ? Icons.mic_off_rounded
+                                          : (isSpeaking ? Icons.volume_up_rounded : Icons.mic_rounded),
+                                      color: member.isMuted
+                                          ? Colors.redAccent
+                                          : const Color(0xff10b981),
+                                      size: 14,
                                     ),
                                   ),
                                   if (widget.isHost && !isHost) ...[
@@ -1367,6 +1446,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
     if (!micStatus.isGranted) {
       setState(() {
         _useSimulatedAudio = true;
+        _agoraConnectionState = "Failed";
       });
       return;
     }
@@ -1389,6 +1469,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
       debugPrint("Agora App ID is empty in settings/agora Firestore document. Falling back to simulated audio call.");
       setState(() {
         _useSimulatedAudio = true;
+        _agoraConnectionState = "Simulated";
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1415,7 +1496,16 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
 
       _engine!.registerEventHandler(RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          // Success callback
+          final myAgoraUid = connection.localUid;
+          if (myAgoraUid != null && myAgoraUid != 0) {
+            _updateMyMemberState(agoraUid: myAgoraUid);
+          }
+          if (mounted) {
+            setState(() {
+              _agoraConnectionState = "Connected";
+              _useSimulatedAudio = false;
+            });
+          }
         },
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
           if (mounted) {
@@ -1431,12 +1521,49 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
             });
           }
         },
+        onConnectionStateChanged: (RtcConnection connection, ConnectionStateType state, ConnectionChangedReasonType reason) {
+          debugPrint("Agora Connection State Changed: $state, Reason: $reason");
+          if (mounted) {
+            setState(() {
+              if (state == ConnectionStateType.connectionStateConnected) {
+                _agoraConnectionState = "Connected";
+                _useSimulatedAudio = false;
+              } else if (state == ConnectionStateType.connectionStateFailed) {
+                _agoraConnectionState = "Failed";
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Agora Voice Call failed to connect. Check your settings/agora configuration in Firestore."),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              } else if (state == ConnectionStateType.connectionStateConnecting) {
+                _agoraConnectionState = "Connecting...";
+              }
+            });
+          }
+        },
+        onAudioVolumeIndication: (RtcConnection connection, List<AudioVolumeInfo> speakers, int speakerNumber, int totalVolume) {
+          final List<int> currentSpeakers = [];
+          for (var speaker in speakers) {
+            if (speaker.volume != null && speaker.volume! > 10) {
+              final speakUid = speaker.uid == 0 ? (connection.localUid ?? 0) : speaker.uid!;
+              currentSpeakers.add(speakUid);
+            }
+          }
+          if (mounted) {
+            setState(() {
+              _speakingAgoraUids = currentSpeakers;
+            });
+          }
+        },
         onError: (ErrorCodeType err, String msg) {
           debugPrint("Agora error: $err - $msg");
         },
       ));
 
       await _engine!.enableAudio();
+      await _engine!.enableAudioVolumeIndication(interval: 200, smooth: 3, reportVad: true);
+      
       await _engine!.joinChannel(
         token: agoraToken,
         channelId: widget.roomId,
@@ -1453,6 +1580,7 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
       if (mounted) {
         setState(() {
           _useSimulatedAudio = true;
+          _agoraConnectionState = "Failed";
         });
       }
     }
@@ -1626,10 +1754,20 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
               decoration: BoxDecoration(
                 color: _isVoiceMuted
                     ? Colors.redAccent.withOpacity(0.15)
-                    : const Color(0xff10b981).withOpacity(0.15),
+                    : (_agoraConnectionState == "Failed"
+                        ? Colors.redAccent.withOpacity(0.15)
+                        : (_agoraConnectionState == "Connecting..."
+                            ? Colors.amberAccent.withOpacity(0.15)
+                            : const Color(0xff10b981).withOpacity(0.15))),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _isVoiceMuted ? Colors.redAccent : const Color(0xff10b981),
+                  color: _isVoiceMuted
+                      ? Colors.redAccent
+                      : (_agoraConnectionState == "Failed"
+                          ? Colors.redAccent
+                          : (_agoraConnectionState == "Connecting..."
+                              ? Colors.amberAccent
+                              : const Color(0xff10b981))),
                   width: 1,
                 ),
               ),
@@ -1639,16 +1777,30 @@ class _GroupStudyRoomScreenState extends State<GroupStudyRoomScreen> with Widget
                   children: [
                     Icon(
                       _isVoiceMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                      color: _isVoiceMuted ? Colors.redAccent : const Color(0xff10b981),
+                      color: _isVoiceMuted
+                          ? Colors.redAccent
+                          : (_agoraConnectionState == "Failed"
+                              ? Colors.redAccent
+                              : (_agoraConnectionState == "Connecting..."
+                                  ? Colors.amberAccent
+                                  : const Color(0xff10b981))),
                       size: 13,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       _isVoiceMuted
                           ? "MUTED"
-                          : (_useSimulatedAudio ? "SIMULATED CALL" : "LIVE AUDIO"),
+                          : (_useSimulatedAudio
+                              ? "SIMULATED CALL"
+                              : "LIVE: ${_agoraConnectionState.toUpperCase()}"),
                       style: TextStyle(
-                        color: _isVoiceMuted ? Colors.redAccent : const Color(0xff10b981),
+                        color: _isVoiceMuted
+                            ? Colors.redAccent
+                            : (_agoraConnectionState == "Failed"
+                                ? Colors.redAccent
+                                : (_agoraConnectionState == "Connecting..."
+                                    ? Colors.amberAccent
+                                    : const Color(0xff10b981))),
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
